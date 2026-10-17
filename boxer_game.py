@@ -2,8 +2,10 @@
 """
 BOXER - a tiny retro boxing game.
 
-Starts in BAG mode (free practice on a heavy bag). Click the SPAR button next to the
-BOXING GYM sign (or press TAB) to fight a computer opponent; click BAG to go back.
+Starts in BAG mode (free practice on a heavy bag). Next to the BOXING GYM sign:
+    SPAR      (or TAB)  a one-off fight against a computer opponent
+    CAMPAIGN  (or C)    four fights back to back for the lightweight title belt
+    BAG                 back to the heavy bag
 
     LEFT / RIGHT       move (you always face right)
     A                  jab
@@ -26,6 +28,12 @@ Sparring rules
       eat a flurry and your guard breaks, leaving you stunned and wide open.
     * Critical hits do extra damage. Hitting someone mid-punch (counter hit), after a slip,
       or while they are stunned makes crits much more likely (stunned = guaranteed).
+
+Campaign
+    * Rusty Rick -> Bruno "The Bulldozer" -> "Lightning" Lee -> Victor "The Crown" Reyes,
+      the lightweight champion. Each has his own look, fighting style and trash talk.
+    * You start every fight at full health. Lose once and you start over at fight 1.
+    * ENTER / SPACE skips dialogue and moves on between fights.
 
 Setup:   pip install pygame
 Run:     python boxer_game.py            (optional: --scale=5 for a bigger window)
@@ -141,6 +149,112 @@ LEVELS = {
 }
 LEVEL_KEYS = ["EASY", "NORMAL", "HARD"]
 
+# ============================================================ looks (palette swaps of the player sprite)
+SRC = dict(  # the player's colours that get swapped
+    glove=(224, 40, 52), glove_l=(255, 120, 108), glove_d=(150, 22, 44), glove_far=(180, 30, 50),
+    glove_far_d=(120, 18, 42), glove_hl=(255, 176, 156),
+    shorts=(46, 98, 208), shorts_s=(26, 56, 148), shorts_l=(104, 158, 248),
+    skin=(240, 172, 114), skin_s=(198, 118, 78), skin_l=(255, 214, 158), skin_far=(206, 126, 86),
+    skin_far_s=(160, 92, 66), skin_ol=(86, 42, 44), ear=(150, 80, 64),
+    hair=(46, 32, 40), hair_s=(28, 18, 28), hair_l=(108, 80, 94),
+    boot=(246, 246, 248), boot_s=(172, 178, 202), boot_far=(206, 210, 226), boot_far_s=(146, 152, 180),
+    sole=(70, 72, 100),
+)
+
+
+def _mix(c, target, t):
+    return tuple(int(round(a + (b - a) * t)) for a, b in zip(c, target))
+
+
+def lighten(c, t):
+    return _mix(c, (255, 255, 255), t)
+
+
+def darken(c, t):
+    return _mix(c, (0, 0, 0), t)
+
+
+def look_palette(glove=None, shorts=None, skin=None, hair=None, boots=None):
+    """Recolour map (player colour -> new colour) built from a few base colours.
+    Gloves also recolour the headband and boot stripes. hair="bald" shaves the head."""
+    m = {}
+    if glove:
+        m.update({SRC["glove"]: glove, SRC["glove_l"]: lighten(glove, .45), SRC["glove_d"]: darken(glove, .35),
+                  SRC["glove_far"]: darken(glove, .18), SRC["glove_far_d"]: darken(glove, .45),
+                  SRC["glove_hl"]: lighten(glove, .65)})
+    if shorts:
+        m.update({SRC["shorts"]: shorts, SRC["shorts_s"]: darken(shorts, .38), SRC["shorts_l"]: lighten(shorts, .4)})
+    skin = skin or SRC["skin"]
+    m.update({SRC["skin"]: skin, SRC["skin_s"]: darken(skin, .2), SRC["skin_l"]: lighten(skin, .3),
+              SRC["skin_far"]: darken(skin, .14), SRC["skin_far_s"]: darken(skin, .34),
+              SRC["skin_ol"]: darken(skin, .62), SRC["ear"]: darken(skin, .4)})
+    if hair == "bald":
+        m.update({SRC["hair"]: darken(skin, .07), SRC["hair_s"]: darken(skin, .25), SRC["hair_l"]: lighten(skin, .35)})
+    elif hair:
+        m.update({SRC["hair"]: hair, SRC["hair_s"]: darken(hair, .4), SRC["hair_l"]: lighten(hair, .35)})
+    if boots:
+        m.update({SRC["boot"]: boots, SRC["boot_s"]: darken(boots, .3), SRC["boot_far"]: darken(boots, .16),
+                  SRC["boot_far_s"]: darken(boots, .42),
+                  SRC["sole"]: (150, 152, 172) if sum(boots) < 360 else (70, 72, 100)})
+    return m
+
+
+SPAR_LOOK = dict(glove=(52, 110, 230), shorts=(196, 40, 52), skin=(170, 108, 70), hair=(232, 196, 92),
+                 boots=(64, 66, 90))
+
+# ============================================================ campaign
+#   look   : colours (see look_palette)          level/ai : AI difficulty + overrides (see LEVELS)
+#   style  : how much he likes each punch        hp/power/speed/walk : health, punch damage,
+#   taunt  : pre-fight animation                                       animation speed, footspeed
+CAMPAIGN = [
+    dict(name='RICK "RUSTY" MALONE', short="RUSTY RICK", title="JOURNEYMAN   -   RECORD 8-11",
+         color=(150, 230, 160), look=dict(glove=(236, 236, 242), shorts=(56, 156, 84), skin=(250, 200, 156),
+                                          hair=(196, 88, 40)),
+         level="EASY", ai=dict(), style=dict(jab=1.6), hp=80, power=0.9, speed=1.0, walk=1.0, taunt="shadowbox",
+         intro="Fresh meat! Hope you packed a lunch, 'cause you're about to get SERVED!",
+         reply="Order up, Rusty. Hope you like it extra crispy.",
+         win="Ha! Back to the punching bag, rookie!",
+         lose="Ow... my everything..."),
+    dict(name='BRUNO "THE BULLDOZER" KASK', short="BULLDOZER", title="HEAVY HITTER   -   RECORD 14-4",
+         color=(255, 170, 90), look=dict(glove=(240, 128, 40), shorts=(52, 48, 64), skin=(214, 150, 100),
+                                         hair="bald", boots=(52, 48, 64)),
+         level="NORMAL", ai=dict(react=0.45, slip=0.08, parry=0.2, atk=(0.8, 1.6)),
+         style=dict(jab=0.6, cross=2.5, body_cross=2.5), hp=120, power=1.2, speed=0.92, walk=0.85, taunt="roar",
+         intro="NOTHING stops the Bulldozer! I'm gonna flatten you like a PANCAKE!",
+         reply="Even bulldozers run out of gas, big guy.",
+         win="FLATTENED! Somebody scrape this guy off my canvas!",
+         lose="Who... turned off... the engine..."),
+    dict(name='"LIGHTNING" LEE PARK', short="LIGHTNING LEE", title="SPEED DEMON   -   RECORD 19-2",
+         color=(200, 160, 255), look=dict(glove=(150, 70, 214), shorts=(240, 206, 56), skin=(232, 182, 132),
+                                          hair=(34, 34, 48)),
+         level="NORMAL", ai=dict(react=0.78, slip=0.5, parry=0.35, delay=(0.05, 0.12), atk=(0.45, 1.0),
+                                 combo=0.55, punish=0.65),
+         style=dict(jab=2.5, body_jab=1.5), hp=95, power=1.0, speed=1.18, walk=1.35, taunt="weave",
+         intro="Better not blink. I'll be done before your health bar even loads!",
+         reply="Lightning never strikes twice. I do.",
+         win="Too slow! Try again in slow motion.",
+         lose="Impossible... nobody's faster than me!"),
+    dict(name='VICTOR "THE CROWN" REYES', short="THE CROWN", title="LIGHTWEIGHT CHAMPION   -   RECORD 40-0",
+         color=(255, 214, 90), champ=True,
+         look=dict(glove=(44, 40, 54), shorts=(232, 180, 56), skin=(196, 128, 88), hair=(26, 22, 28)),
+         level="HARD", ai=dict(parry=0.5), style=dict(), hp=130, power=1.12, speed=1.06, walk=1.1, taunt="belt",
+         intro="Forty fights. Forty knockouts. You want my belt? Come and take it... if you dare.",
+         reply="I didn't come here to lose. That belt is MINE.",
+         win="You were never on my level.",
+         lose="The crown... is yours, kid. Wear it well."),
+]
+LOSE_LINES = ["Dang it... I'll get 'em next time!", "Ugh. Back to the heavy bag...",
+              "That one's on me. Run it back!"]
+TAUNTS = {   # frame sequence, ms per frame
+    "shadowbox": ([3, 4, 5, 6, 7, 0, 0, 12, 13, 14, 15, 16, 17, 0, 0, 0], 90),
+    "roar": ([0, 0, 53, 54, 54, 54, 54, 54, 53, 0, 0, 0], 110),
+    "weave": ([8, 9, 10, 9, 8, 0, 8, 9, 10, 9, 8, 0, 0, 0], 55),
+    "belt": ([54, 54, 54, 54, 54, 54, 53, 54], 130),
+    "reply": ([0, 37, 38, 38, 38, 38, 37, 0], 120),
+    "champ": ([54, 54, 54, 53], 180),
+}
+CONFETTI = [(255, 90, 110), (255, 214, 90), (90, 200, 255), (130, 240, 140), (255, 255, 255), (200, 140, 255)]
+
 
 # ============================================================ small helpers
 def clamp(v, lo, hi):
@@ -163,8 +277,63 @@ def draw_text(surf, font, s, x, y, color, shadow=(20, 14, 30), center=False, rig
 
 def load_strip(b64):
     raw = base64.b64decode("".join(b64.split()))
-    strip = pygame.image.load(io.BytesIO(raw), "strip.png").convert_alpha()
-    return [strip.subsurface((i * FW, 0, FW, FH)).copy() for i in range(strip.get_width() // FW)]
+    return pygame.image.load(io.BytesIO(raw), "strip.png").convert_alpha()
+
+
+def split(strip, flip=False):
+    frames = [strip.subsurface((i * FW, 0, FW, FH)).copy() for i in range(strip.get_width() // FW)]
+    return [pygame.transform.flip(f, True, False) for f in frames] if flip else frames
+
+
+def recolor(strip, mapping):
+    """Exact colour swap (via temporary colours, so swaps can't chain into each other)."""
+    s = strip.copy()
+    pa = pygame.PixelArray(s)
+    temps = []
+    for k, (src, dst) in enumerate(mapping.items()):
+        tmp = (k + 1, 1, 3)
+        pa.replace(src, tmp)
+        temps.append((tmp, dst))
+    for tmp, dst in temps:
+        pa.replace(tmp, dst)
+    pa.close()
+    return s
+
+
+def wrap(font, text, width):
+    lines, cur = [], ""
+    for word in text.split():
+        trial = (cur + " " + word).strip()
+        if font.size(trial)[0] <= width or not cur:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def make_belt():
+    s = pygame.Surface((36, 13), pygame.SRCALPHA)
+    ol, gold, gold_l, gold_d = (24, 14, 34), (236, 184, 56), (255, 232, 140), (170, 118, 30)
+    s.fill(ol, (0, 3, 36, 7))
+    s.fill((48, 30, 44), (1, 4, 34, 5))
+    s.fill((84, 56, 70), (1, 4, 34, 1))
+    for x in (3, 32):
+        s.set_at((x, 6), gold_l)
+    for x in (5, 27):
+        s.fill(ol, (x, 2, 5, 9))
+        s.fill(gold, (x + 1, 3, 3, 7))
+        s.fill(gold_l, (x + 1, 3, 3, 1))
+        s.fill(gold_d, (x + 1, 9, 3, 1))
+    pygame.draw.ellipse(s, ol, (10, 0, 16, 13))
+    pygame.draw.ellipse(s, gold_d, (11, 1, 14, 11))
+    pygame.draw.ellipse(s, gold, (11, 1, 13, 10))
+    pygame.draw.ellipse(s, gold_l, (13, 2, 7, 4))
+    pygame.draw.circle(s, (220, 36, 60), (18, 6), 2)
+    s.set_at((17, 5), (255, 170, 180))
+    return s
 
 
 def fist_point(frame):
@@ -186,7 +355,7 @@ def time_to_active(f):
     first = next(i for i, fr in enumerate(spec["frames"]) if fr in spec["active"])
     if f.idx >= first:
         return 0.0
-    return (sum(spec["ms"][f.idx:first]) - f.t) / 1000.0
+    return (sum(spec["ms"][f.idx:first]) - f.t) / 1000.0 / f.speed
 
 
 # ============================================================ sound (synthesised, no files)
@@ -249,6 +418,48 @@ def make_sounds():
         snd["parry"] = bell(0.30, 1250, 0.8)
         snd["guard_break"] = thump(0.35, 260, 60, 0.9, 1.0)
         snd["bell"] = bell(1.2, 880, 1.0)
+
+        def tones(notes, wave, vol):
+            starts, acc = [], 0.0
+            for _, d, _ in notes:
+                starts.append(acc)
+                acc += d
+            ph = [0.0]
+
+            def fn(t, u):
+                i = 0
+                while i + 1 < len(notes) and t >= starts[i + 1]:
+                    i += 1
+                f, d, vib = notes[i]
+                lt = t - starts[i]
+                if vib:
+                    f *= 1 + 0.04 * math.sin(2 * math.pi * 5.5 * lt) * min(1.0, lt / 0.25)
+                ph[0] += 2 * math.pi * f / rate
+                env = min(1.0, lt / 0.02) * (1.0 - 0.45 * lt / d)
+                if lt > d - 0.03:
+                    env *= max(0.0, (d - lt) / 0.03)
+                return wave(ph[0]) * env * vol
+            return synth(acc, fn)
+
+        def brass(p):
+            return 0.55 * math.sin(p) + 0.3 * math.sin(2 * p) + 0.18 * math.sin(3 * p) + 0.1 * math.sin(4 * p)
+
+        def square(p):
+            return 0.45 if math.sin(p) >= 0 else -0.45
+
+        snd["sad"] = tones([(233, .34, 0), (220, .34, 0), (208, .34, 0), (196, 1.1, 1)], brass, 0.8)
+        snd["fanfare"] = tones([(523, .12, 0), (659, .12, 0), (784, .12, 0), (1047, .26, 0), (784, .12, 0),
+                                (1047, .7, 1)], square, 0.5)
+        snd["blip"] = tones([(900, .022, 0)], square, 0.22)
+        crowd_state = [0.0, 0.0]
+
+        def crowd(t, u):
+            crowd_state[0] += (random.uniform(-1, 1) - crowd_state[0]) * 0.35
+            crowd_state[1] += (crowd_state[0] - crowd_state[1]) * 0.5
+            swell = 0.7 + 0.3 * math.sin(2 * math.pi * 1.3 * t) * math.sin(2 * math.pi * 0.7 * t)
+            env = min(1.0, t / 0.4) * min(1.0, (2.6 - t) / 0.9)
+            return crowd_state[1] * 2.2 * swell * env
+        snd["crowd"] = synth(2.6, crowd)
     except pygame.error:
         return {}
     return snd
@@ -453,7 +664,12 @@ class Fighter:
         self.game = game
         self.frames = frames
         self.facing = facing           # +1 faces right, -1 faces left
+        self.configure()
         self.reset(72)
+
+    def configure(self, max_hp=MAX_HP, power=1.0, speed=1.0, walk=1.0):
+        """Per-boxer stats: health, punch damage multiplier, animation speed, footspeed."""
+        self.max_hp, self.power, self.speed, self.walk = float(max_hp), power, speed, walk
 
     def reset(self, x):
         self.x = float(x)
@@ -465,8 +681,10 @@ class Fighter:
         self.counter_t, self.is_counter = 0.0, False
         self.hit_done = False
         self.attack_id = 0
-        self.hp = self.hp_lag = float(MAX_HP)
-        self.regen_cap = REGEN_CAP
+        self.hp = self.hp_lag = self.max_hp
+        self.regen_cap = self.max_hp * REGEN_CAP / MAX_HP
+        self.pose_override = None      # a fixed frame (taunts, celebrations)
+        self.belt = False              # holding the title belt overhead
         self.since_damage = 99.0
         self.healing = False
         self.guard, self.guard_t = float(GUARD_MAX), 99.0
@@ -550,8 +768,8 @@ class Fighter:
     def push(self, px):
         self.x = clamp(self.x - self.facing * px, MIN_X, STAGE_MAX_X)
 
-    def make_ghost(self):
-        img = self.frames[IDLE_SEQ[self.idle_i]].copy()
+    def make_ghost(self, frame=None):
+        img = self.frames[IDLE_SEQ[self.idle_i] if frame is None else frame].copy()
         img.fill((50, 80, 150, 0), special_flags=pygame.BLEND_RGB_ADD)
         return dict(img=img, x=self.sprite_x(), t=0.0, life=0.26)
 
@@ -569,6 +787,8 @@ class Fighter:
         return self.x + self.facing * (fx - HIP_X + self.lunge()), GROUND - SPRITE_FEET + fy
 
     def current_frame(self):
+        if self.pose_override is not None:
+            return self.pose_override
         if self.ko:
             return F_KO[0] if self.end_t < 0.12 else (F_KO[1] if self.end_t < 0.45 else F_KO[2])
         if self.won and self.end_t >= 0:
@@ -663,7 +883,7 @@ class Fighter:
 
     def update_action(self, dt):
         spec = ACTIONS[self.action]
-        self.t += dt * 1000.0
+        self.t += dt * 1000.0 * self.speed
         while self.action and self.t >= spec["ms"][self.idx]:
             self.t -= spec["ms"][self.idx]
             self.idx += 1
@@ -689,7 +909,7 @@ class Fighter:
         moved, fwd = False, True
         if move:
             fwd = move == self.facing
-            speed = WALK_FWD if fwd else WALK_BACK
+            speed = (WALK_FWD if fwd else WALK_BACK) * self.walk
             if move > 0:      # never pushed backwards by a limit, only stopped by it
                 nx = max(self.x, min(self.x + speed * dt, max_x))
             else:
@@ -718,18 +938,28 @@ class Fighter:
         for g in self.ghosts:
             g["img"].set_alpha(int(120 * (1 - g["t"] / g["life"])))
             c.blit(g["img"], (g["x"], sy))
-        c.blit(self.frames[self.current_frame()], (self.sprite_x(), sy))
+        frame, sx = self.current_frame(), self.sprite_x()
+        if self.belt:                  # drawn first so the gloves grip it
+            top, cx = self.game.frame_top(self.frames, frame)
+            b = self.game.belt
+            c.blit(b, (sx + cx - b.get_width() // 2, sy + top - 1))
+        c.blit(self.frames[frame], (sx, sy))
 
 
 # ============================================================ the computer's brain
 class AI:
     def __init__(self, game, me, foe):
         self.game, self.me, self.foe = game, me, foe
-        self.level = "NORMAL"
+        self.set_level("NORMAL")
         self.reset()
 
+    def set_level(self, name, overrides=None, style=None):
+        self.level = name
+        self.params = dict(LEVELS[name], **(overrides or {}))
+        self.style = dict(style or {})
+
     def reset(self):
-        L = LEVELS[self.level]
+        L = self.params
         self.atk_t = random.uniform(*L["atk"]) + 0.4
         self.plan = []
         self.def_plan = None
@@ -757,11 +987,12 @@ class AI:
             w = dict(jab=3, cross=3, body_jab=0.5, body_cross=0.3)
         else:
             w = dict(jab=4, cross=2, body_jab=2, body_cross=1.5)
+        w = {n: v * self.style.get(n, 1.0) for n, v in w.items()}
         names = list(w)
         return [random.choices(names, weights=[w[n] for n in names])[0]]
 
     def update(self, dt):
-        me, foe, L = self.me, self.foe, LEVELS[self.level]
+        me, foe, L = self.me, self.foe, self.params
         R = self.game.ranges
         self.move = 0
         self.clock += dt
@@ -779,7 +1010,8 @@ class AI:
             target = ACTIONS[foe.action]["target"]
             self.foe_body = (self.foe_body + [target == "body"])[-4:]
             self.foe_times = [t for t in self.foe_times if self.clock - t < 1.2] + [self.clock]
-            react = L["react"] + (0.15 if me.hp < 35 else 0.0) + (0.2 if len(self.foe_times) >= 3 else 0.0)
+            react = (L["react"] + (0.15 if me.hp < 0.35 * me.max_hp else 0.0)
+                     + (0.2 if len(self.foe_times) >= 3 else 0.0))
             if dist <= R[foe.action] + 6 and random.random() < react:
                 if target == "head" and random.random() < L["slip"]:
                     kind = "slip"
@@ -833,7 +1065,7 @@ class AI:
             self.plan = random.choice([["cross", "body_cross"], ["jab", "cross", "jab"], ["body_cross", "cross"]])
         self.atk_t -= dt
         if self.atk_t <= 0 and not self.plan and not me.action:
-            self.atk_t = random.uniform(*L["atk"]) * (1.4 if me.hp < 30 else 1.0)
+            self.atk_t = random.uniform(*L["atk"]) * (1.4 if me.hp < 0.3 * me.max_hp else 1.0)
             if dist <= R["jab"] + 2:
                 self.plan = self.choose_attack(L, foe)
             else:
@@ -856,7 +1088,7 @@ class AI:
         if self.retreat_t > 0:
             self.retreat_t -= dt
             self.move = 1
-        elif me.hp < 30 and me.hp < me.regen_cap and random.random() < 0.5 * dt:
+        elif me.hp < 0.3 * me.max_hp and me.hp < me.regen_cap and random.random() < 0.5 * dt:
             self.retreat_t = 1.4                 # back off to try to heal
         elif self.step_t > 0:
             self.step_t -= dt
@@ -868,11 +1100,77 @@ class AI:
             self.step_dir = random.choice([-1, 1])
 
 
+# ============================================================ speech bubbles
+class Bubble:
+    CPS = 38          # characters per second (typewriter)
+    HOLD = 1.6        # seconds it stays up after the text finishes
+
+    def __init__(self, game, who, text, min_top=48):
+        self.game, self.who, self.text = game, who, text
+        self.min_top = min_top          # keep clear of the HUD / banners above
+        self.t = 0.0
+        self.last = 0
+        self.lines = wrap(game.font_s, text, 170)
+
+    def shown(self):
+        return min(len(self.text), int(self.t * self.CPS))
+
+    def typed(self):
+        return self.shown() >= len(self.text)
+
+    def finished(self):
+        return self.t >= len(self.text) / self.CPS + self.HOLD
+
+    def advance(self):
+        self.t = len(self.text) / self.CPS if not self.typed() else 1e9
+
+    def update(self, dt):
+        self.t += dt
+        n = self.shown()
+        if n // 3 > self.last // 3 and n < len(self.text):
+            self.game.snd("blip")
+        self.last = n
+
+    def draw(self, c):
+        g, who = self.game, self.who
+        font = g.font_s
+        lh = 10
+        w = max(font.size(l)[0] for l in self.lines) + 10
+        h = lh * len(self.lines) + 6
+        top, cx = g.frame_top(who.frames, who.current_frame())
+        head_x = who.sprite_x() + cx
+        bottom = GROUND - SPRITE_FEET + top - (9 if who.belt else 0) - 7
+        x = int(clamp(head_x - w // 2, 4, VW - 4 - w))
+        y = int(max(bottom - h, self.min_top))
+        bottom = y + h
+        ol, paper, ink = (24, 14, 34), (250, 248, 240), (34, 26, 48)
+        tx = int(clamp(head_x, x + 7, x + w - 7))
+        pygame.draw.polygon(c, ol, [(tx - 5, bottom - 1), (tx + 4, bottom - 1), (tx - 1, bottom + 6)])
+        c.fill(ol, (x - 1, y, w + 2, h))
+        c.fill(ol, (x, y - 1, w, h + 2))
+        c.fill(paper, (x, y, w, h))
+        pygame.draw.polygon(c, paper, [(tx - 3, bottom - 1), (tx + 2, bottom - 1), (tx - 1, bottom + 3)])
+        c.fill((214, 210, 226), (x, y + h - 1, w, 1))
+        left = self.shown()
+        for i, line in enumerate(self.lines):
+            part = line[:max(0, left)]
+            left -= len(line) + 1
+            if part:
+                c.blit(font.render(part, False, ink), (x + 5, y + 3 + i * lh))
+        if self.typed() and int(self.t * 3) % 2 == 0:
+            c.fill(ink, (x + w - 6, y + h - 4, 3, 2))       # "more" marker
+
+
 # ============================================================ the game
 class Game:
     def __init__(self, sounds=True):
-        frames = load_strip(STRIP_B64)
-        opp = [pygame.transform.flip(f, True, False) for f in load_strip(OPP_B64)]
+        strip = load_strip(STRIP_B64)
+        frames = split(strip)
+        self.spar_frames = split(recolor(strip, look_palette(**SPAR_LOOK)), flip=True)
+        self.campaign_frames = [split(recolor(strip, look_palette(**o["look"])), flip=True) for o in CAMPAIGN]
+        self.belt = make_belt()
+        self.belt_small = pygame.transform.scale(self.belt, (18, 7))
+        self._tops = {}
         self.fist = {i: fist_point(frames[i]) for i in (6, 14, 15, 29, 34)}
         self.ranges = {}
         for n in PUNCHES:
@@ -896,15 +1194,33 @@ class Game:
         self.bag_shadow = pygame.Surface((40, 8), pygame.SRCALPHA)
         pygame.draw.ellipse(self.bag_shadow, (14, 10, 24, 70), (0, 0, 40, 8))
         sign_w = pygame.font.Font(None, 20).size("BOXING GYM")[0]
-        self.button = pygame.Rect(SIGN_POS[0] + sign_w + 7, SIGN_POS[1] - 2, 34, 13)
-        self.hover = False
+        self.button = pygame.Rect(SIGN_POS[0] + sign_w + 6, SIGN_POS[1] - 2, 30, 13)
+        cw = self.font_s.size("CAMPAIGN")[0] + 8
+        self.campaign_button = pygame.Rect(self.button.right + 3, self.button.y, cw, 13)
+        self.hover = None
 
         self.player = Fighter(self, frames, 1)
-        self.cpu = Fighter(self, opp, -1)
+        self.cpu = Fighter(self, self.spar_frames, -1)
         self.ai = AI(self, self.cpu, self.player)
         self.clock = 0.0
         self.mode = "bag"
+        self.stage = 0
+        self.opp = CAMPAIGN[0]
+        self.bubble = None
+        self.confetti = []
+        self.phase, self.phase_t = "intro", 0.0
         self.reset_bag()
+
+    def frame_top(self, frames, i):
+        """(top row, x-centre of the top rows) of a frame's opaque pixels - where the gloves/head are."""
+        key = (id(frames), i)
+        if key not in self._tops:
+            f = frames[i]
+            rects = pygame.mask.from_surface(f).get_bounding_rects()
+            top = min(r.top for r in rects)
+            xs = [x for y in range(top, min(FH, top + 5)) for x in range(FW) if f.get_at((x, y)).a > 0]
+            self._tops[key] = (top, (min(xs) + max(xs)) // 2)
+        return self._tops[key]
 
     # ------------------------------------------------------------ modes
     def clear_fx(self):
@@ -921,16 +1237,178 @@ class Game:
 
     def start_spar(self):
         self.mode = "spar"
+        self.cpu.frames = self.spar_frames
+        self.cpu.configure()
+        self.ai.set_level(self.ai.level if self.ai.level in LEVELS else "NORMAL")
         self.player.reset(96)
         self.cpu.reset(224)
         self.ai.reset()
         self.phase, self.phase_t = "intro", 0.0
         self.round_time = float(ROUND_TIME)
         self.result = None
+        self.end_reason = None
+        self.bubble = None
         self.best = 0
         self.clear_fx()
         self.snd("bell")
 
+    # ------------------------------------------------------------ campaign
+    def start_campaign(self):
+        self.mode = "campaign"
+        self.stage = 0
+        self.begin_stage()
+
+    def begin_stage(self):
+        o = self.opp = CAMPAIGN[self.stage]
+        p, c = self.player, self.cpu
+        c.frames = self.campaign_frames[self.stage]
+        c.configure(o["hp"], o["power"], o["speed"], o["walk"])
+        p.reset(96)
+        c.reset(372)                       # off screen - walks in
+        self.ai.set_level(o["level"], o.get("ai"), o.get("style"))
+        self.ai.reset()
+        self.phase, self.phase_t = "walkin", 0.0
+        self.round_time = float(ROUND_TIME)
+        self.result = None
+        self.end_reason = None
+        self.bubble = None
+        self.confetti = []
+        self.step = 0
+        self.taunt_i = -1
+        self.ghost_t = 0.0
+        self.fw_t = 0.0
+        self.best = 0
+        self.clear_fx()
+
+    def taunt_frame(self, kind, t):
+        seq, ms = TAUNTS[kind]
+        i = int(t * 1000 / ms) % len(seq)
+        return seq[i], i
+
+    def update_campaign(self, dt, move, want):
+        p, c, o = self.player, self.cpu, self.opp
+        if self.bubble:
+            self.bubble.update(dt)
+        if self.phase in ("intro", "fight", "ko"):
+            self.update_spar(dt, move, want)
+            if self.phase == "result":
+                self.after_fight()
+            return
+        self.phase_t += dt
+        p.want_block = c.want_block = None
+        ph = self.phase
+
+        if ph == "walkin":
+            c.walk = 1.6 * o["walk"]
+            c.update(dt, -1, p.x + MIN_SEP, 400)
+            c.walk = o["walk"]
+            if c.x <= 224:
+                c.x, c.moving = 224.0, 0
+                self.phase, self.phase_t = "talk", 0.0
+                self.bubble = Bubble(self, c, o["intro"])
+                if o.get("champ"):
+                    self.snd("crowd")
+        elif ph == "talk":
+            c.pose_override, i = self.taunt_frame(o["taunt"], self.phase_t)
+            c.belt = bool(o.get("champ"))
+            if o["taunt"] == "roar" and i == 3 and self.taunt_i != 3:
+                self.shake, self.shake_t = 2, 0.2              # the Bulldozer shakes the room
+            if o["taunt"] == "weave":
+                self.ghost_t -= dt
+                if self.ghost_t <= 0:
+                    self.ghost_t = 0.09
+                    c.ghosts.append(c.make_ghost(c.pose_override))
+            if o["taunt"] == "belt" and random.random() < dt * 14:
+                top, cx = self.frame_top(c.frames, c.pose_override)
+                self.parts.append([c.sprite_x() + cx + random.uniform(-16, 16), GROUND - SPRITE_FEET + top + 4,
+                                   random.uniform(-10, 10), random.uniform(-60, -20), random.uniform(0.2, 0.45),
+                                   random.choice([(255, 244, 168), (255, 255, 255)])])
+            self.taunt_i = i
+            if self.bubble.finished():
+                c.pose_override, c.belt = None, False
+                self.phase, self.phase_t = "reply", 0.0
+                self.bubble = Bubble(self, p, o["reply"])
+        elif ph == "reply":
+            p.pose_override, _ = self.taunt_frame("reply", self.phase_t)
+            if self.bubble.finished():
+                p.pose_override = None
+                self.bubble = None
+                self.phase, self.phase_t = "intro", 0.0
+                self.snd("bell")
+        elif ph == "victory":
+            if self.bubble and self.bubble.finished():
+                self.bubble = None
+        elif ph == "defeat":
+            if self.step == 0 and self.phase_t > 0.6:
+                self.bubble = Bubble(self, c, o["win"])
+                self.step = 1
+            elif self.step == 1 and self.bubble.finished():
+                self.bubble = Bubble(self, p, random.choice(LOSE_LINES), min_top=66)
+                self.step = 2
+            elif self.step == 2 and self.bubble.finished():
+                self.bubble = None
+                self.step = 3
+        elif ph == "champion":
+            p.pose_override, _ = self.taunt_frame("champ", self.phase_t)
+            p.belt = True
+            n = 70 * dt
+            for _ in range(int(n) + (1 if random.random() < n % 1 else 0)):
+                self.confetti.append([random.uniform(0, VW), -4.0, random.uniform(-12, 12), random.uniform(22, 42),
+                                      random.choice(CONFETTI), random.uniform(0, 6.3)])
+            for k in self.confetti:
+                k[0] += k[2] * dt + math.sin(k[5]) * 0.3
+                k[1] += k[3] * dt
+                k[5] += dt * 6
+            self.confetti = [k for k in self.confetti if k[1] < GROUND + 8]
+            self.fw_t -= dt
+            if self.fw_t <= 0:
+                self.fw_t = random.uniform(0.35, 0.8)
+                self.firework(random.uniform(30, VW - 30), random.uniform(48, 88))
+            if self.step == 0 and self.phase_t > 1.0:
+                self.bubble = Bubble(self, p, "WHO'S THE CHAMP NOW?!", min_top=58)
+                self.step = 1
+            elif self.step == 1 and self.bubble.finished():
+                self.bubble = None
+                self.step = 2
+            if int(self.phase_t / 3.0) != int((self.phase_t - dt) / 3.0):
+                self.snd("crowd")
+        # keep everyone breathing / kneeling / celebrating
+        p.update(dt, 0, MIN_X, c.x - MIN_SEP)
+        if ph != "walkin":
+            c.update(dt, 0, p.x + MIN_SEP, STAGE_MAX_X)
+
+    def after_fight(self):
+        p, c = self.player, self.cpu
+        self.phase_t, self.step = 0.0, 0
+        self.bubble = None
+        if self.result == "YOU WIN!":
+            if self.stage == len(CAMPAIGN) - 1:
+                self.phase = "champion"
+                p.won, p.end_t = True, max(p.end_t, 0.0)
+                self.confetti = []
+                self.snd("fanfare")
+                self.snd("crowd")
+            else:
+                self.phase = "victory"
+                self.bubble = Bubble(self, c, self.opp["lose"], min_top=80)
+        else:
+            self.phase = "defeat"
+            if not c.won:
+                c.won, c.end_t = True, 0.0
+            if not p.ko:
+                p.ko, p.end_t = True, 0.6
+            self.snd("sad")
+
+    def firework(self, x, y):
+        col = random.choice(CONFETTI)
+        for k in range(26):
+            a = k * math.pi * 2 / 26 + random.uniform(-0.1, 0.1)
+            sp = random.uniform(55, 95)
+            self.parts.append([x, y, math.cos(a) * sp, math.sin(a) * sp - 50, random.uniform(0.45, 0.8),
+                               col if k % 3 else (255, 255, 255)])
+        self.stars.append(dict(x=x, y=y, t=0.0, life=0.14, big=False, kind="hit"))
+
+    # ------------------------------------------------------------ mode switching
     def toggle_mode(self):
         if self.mode == "bag":
             self.start_spar()
@@ -940,26 +1418,50 @@ class Game:
     def reset(self):
         if self.mode == "bag":
             self.reset_bag()
-        else:
+        elif self.mode == "spar":
             self.start_spar()
+        else:
+            self.start_campaign()
 
     def set_level(self, name):
-        self.ai.level = name
+        if self.mode == "campaign":
+            return
+        self.ai.set_level(name)
         if self.mode == "spar":
             self.start_spar()
 
     def confirm(self):
         if self.mode == "spar" and self.phase == "result":
             self.start_spar()
+        elif self.mode == "campaign":
+            ph = self.phase
+            if ph in ("talk", "reply") and self.bubble:
+                self.bubble.advance()
+            elif ph == "victory" and self.phase_t > 0.5:
+                self.stage += 1
+                self.begin_stage()
+            elif ph == "defeat":
+                if self.step < 3 and self.bubble:
+                    self.bubble.advance()
+                elif self.step >= 3 or self.phase_t > 0.6:
+                    self.start_campaign()             # lose = back to fight 1
+            elif ph == "champion" and self.phase_t > 1.5:
+                self.start_campaign()
 
     def mouse(self, x, y, click):
-        self.hover = self.button.collidepoint(x, y)
-        if click and self.hover:
+        self.hover = None
+        if self.button.collidepoint(x, y):
+            self.hover = "main"
+        elif self.mode == "bag" and self.campaign_button.collidepoint(x, y):
+            self.hover = "campaign"
+        if click and self.hover == "main":
             self.toggle_mode()
+        elif click and self.hover == "campaign":
+            self.start_campaign()
 
     # ------------------------------------------------------------ input
     def press(self, name):
-        if self.mode == "spar" and self.phase != "fight":
+        if self.mode != "bag" and self.phase != "fight":
             return
         self.player.press(name)
 
@@ -977,7 +1479,7 @@ class Game:
     def on_miss(self, f, frame):
         wx, wy = f.tip(frame)
         self.say("miss", wx - 8, wy - 8, (150, 156, 182), self.font_s, vy=-14, life=0.6)
-        if f is self.player and self.mode == "spar":
+        if f is self.player and self.mode != "bag":
             self.ai.punish = True
 
     # ------------------------------------------------------------ update
@@ -998,6 +1500,8 @@ class Game:
             limit = max(MAX_X, self.bag.x_at(BAG_TOP + BAG_H / 2) - (BAG_X - MAX_X))
             self.player.update(dt, move, MIN_X, limit)
             self.check_bag_hit()
+        elif self.mode == "campaign":
+            self.update_campaign(dt, move, want)
         else:
             self.update_spar(dt, move, want)
 
@@ -1032,15 +1536,21 @@ class Game:
     def end_fight(self, by_time=False, loser=None):
         p, c = self.player, self.cpu
         if by_time:
-            if abs(p.hp - c.hp) < 0.5:
+            pr, cr = p.hp / p.max_hp, c.hp / c.max_hp          # decision on % of health left
+            if abs(pr - cr) < 0.005:
                 self.result = "DRAW"
             else:
-                self.result = "YOU WIN!" if p.hp > c.hp else "YOU LOSE"
-                winner = p if p.hp > c.hp else c
+                self.result = "YOU WIN!" if pr > cr else "YOU LOSE"
+                winner = p if pr > cr else c
                 winner.won, winner.end_t = True, 0.0
-            self.phase, self.phase_t = "result", 0.0
-            self.say("TIME!", VW // 2 - 22, 70, (255, 232, 130), self.font_xl, vy=0, life=1.5)
+            self.end_reason = "time"
+            if self.mode == "campaign":
+                self.phase, self.phase_t = "ko", 0.0
+            else:
+                self.phase, self.phase_t = "result", 0.0
+                self.say("TIME!", VW // 2 - 22, 70, (255, 232, 130), self.font_xl, vy=0, life=1.5)
         else:
+            self.end_reason = "ko"
             winner = c if loser is p else p
             winner.won, winner.end_t = True, -0.9
             self.result = "YOU WIN!" if loser is c else "YOU LOSE"
@@ -1128,11 +1638,12 @@ class Game:
         crit = crit or random.random() < chance
         if crit:
             mult *= CRIT_MULT
-        dmg = max(1, int(round(spec["spar_dmg"] * mult)))
+        dmg = max(1, int(round(spec["spar_dmg"] * mult * att.power)))
         d.hp = max(0.0, d.hp - dmg)
         d.since_damage = 0.0
         if target == "body":
-            d.regen_cap = max(REGEN_CAP_MIN, d.regen_cap - BODY_CAP_LOSS)
+            scale = d.max_hp / MAX_HP
+            d.regen_cap = max(REGEN_CAP_MIN * scale, d.regen_cap - BODY_CAP_LOSS * scale)
         d.get_hit(target, spec["stun"] + (0.25 if crit else 0.0))
         d.push(12 if crit else (7 if spec["guard"] > 20 else 4))
         if d is self.player:
@@ -1240,6 +1751,9 @@ class Game:
         c = self.canvas
         c.blit(self.bg, (0, 0))
         p = self.player
+        champ = self.mode == "campaign" and self.phase == "champion"
+        if champ:
+            self.draw_spotlight(c, p.x + 4)
         if self.mode == "bag":
             c.blit(self.bag_shadow, (int(self.bag.bottom_x()) - 20, GROUND - 4))
             self.bag.draw(c)
@@ -1253,6 +1767,8 @@ class Game:
                 f.draw(c)
             if p.counter_t > 0 and int(p.counter_t * 14) % 2 == 0 and self.phase == "fight":
                 draw_text(c, self.font_s, "COUNTER READY", p.x + 6, GROUND - 96, (120, 220, 255), center=True)
+        if self.mode == "campaign" and self.phase == "defeat":
+            self.draw_defeat_mood(c)
 
         for s in self.stars:
             self.draw_star(c, s)
@@ -1263,6 +1779,10 @@ class Game:
             if t["t"] > t["life"] * 0.7 and int(t["t"] * 30) % 2:
                 continue
             draw_text(c, t["font"], t["s"], t["x"], t["y"], t["color"])
+        for x, y, _, _, col, ph in self.confetti:
+            c.fill(col, (int(x), int(y), 2, 1) if math.sin(ph) > 0 else (int(x), int(y), 1, 2))
+        if self.bubble:
+            self.bubble.draw(c)
 
         if self.mode == "bag":
             self.draw_bag_hud(c)
@@ -1309,14 +1829,62 @@ class Game:
             pygame.draw.circle(c, (255, 255, 255), (int(s["x"]), int(s["y"])), max(1, r - 2))
 
     def draw_button(self, c):
-        r = self.button
-        label = "SPAR" if self.mode == "bag" else "BAG"
-        face = (255, 120, 170) if self.hover else (206, 66, 122)
-        pygame.draw.rect(c, (20, 14, 30), r.inflate(2, 2))
-        pygame.draw.rect(c, face, r)
-        c.fill((255, 190, 214), (r.x, r.y, r.w, 1))
-        c.fill((120, 28, 72), (r.x, r.bottom - 1, r.w, 1))
-        draw_text(c, self.font_s, label, r.centerx, r.y + 3, (255, 255, 255), shadow=(110, 24, 64), center=True)
+        def button(r, label, hover, face, face_hi, top, bottom, shadow):
+            pygame.draw.rect(c, (20, 14, 30), r.inflate(2, 2))
+            pygame.draw.rect(c, face_hi if hover else face, r)
+            c.fill(top, (r.x, r.y, r.w, 1))
+            c.fill(bottom, (r.x, r.bottom - 1, r.w, 1))
+            draw_text(c, self.font_s, label, r.centerx, r.y + 3, (255, 255, 255), shadow=shadow, center=True)
+
+        button(self.button, "SPAR" if self.mode == "bag" else "BAG", self.hover == "main",
+               (206, 66, 122), (255, 120, 170), (255, 190, 214), (120, 28, 72), (110, 24, 64))
+        if self.mode == "bag":
+            button(self.campaign_button, "CAMPAIGN", self.hover == "campaign",
+                   (196, 140, 30), (240, 186, 60), (255, 226, 140), (120, 80, 16), (100, 62, 10))
+
+    def draw_spotlight(self, c, x):
+        glow = pygame.Surface((VW, VH), pygame.SRCALPHA)
+        sway = math.sin(self.clock * 1.7) * 6
+        pygame.draw.polygon(glow, (255, 236, 170, 34), [(x - 8 + sway, 0), (x + 8 + sway, 0), (x + 44, GROUND + 4),
+                                                         (x - 44, GROUND + 4)])
+        pygame.draw.ellipse(glow, (255, 236, 170, 46), (x - 46, GROUND - 6, 92, 14))
+        c.blit(glow, (0, 0))
+
+    def draw_defeat_mood(self, c):
+        a = int(min(1.0, self.phase_t / 0.8) * 110)
+        dim = pygame.Surface((VW, VH), pygame.SRCALPHA)
+        dim.fill((8, 6, 24, a))
+        c.blit(dim, (0, 0))
+        if self.phase_t < 0.5:
+            return
+        p = self.player                               # a little rain cloud over the loser
+        cx, cy = int(p.x) + 8, GROUND - SPRITE_FEET + 14
+        for x in range(-10, 11, 2):
+            for k in range(3):
+                yy = cy + 4 + ((self.clock * 70 + x * 7 + k * 9) % 22)
+                c.fill((120, 150, 210), (cx + x + (k % 2), int(yy), 1, 2))
+        for (dx, dy, r) in ((-7, 1, 5), (0, -2, 7), (7, 1, 5), (-2, 2, 6), (4, 2, 6)):
+            pygame.draw.circle(c, (40, 40, 58), (cx + dx, cy + dy), r + 1)
+        for (dx, dy, r) in ((-7, 1, 5), (0, -2, 7), (7, 1, 5), (-2, 2, 6), (4, 2, 6)):
+            pygame.draw.circle(c, (104, 108, 132), (cx + dx, cy + dy), r)
+        pygame.draw.circle(c, (140, 144, 168), (cx - 2, cy - 4), 3)
+
+    def draw_name_card(self, c):
+        o = self.opp
+        k = clamp(1 - self.phase_t / 0.35, 0.0, 1.0)
+        off = int(k * k * VW)
+        y, h = 50, 44
+        band = pygame.Surface((VW, h), pygame.SRCALPHA)
+        band.fill((10, 8, 20, 190))
+        c.blit(band, (off, y))
+        edge = (255, 214, 90) if o.get("champ") else o["color"]
+        c.fill(edge, (off, y, VW, 1))
+        c.fill(edge, (off, y + h - 1, VW, 1))
+        draw_text(c, self.font_s, "FIGHT %d OF %d" % (self.stage + 1, len(CAMPAIGN)), 12 + off, y + 4, (170, 180, 215))
+        draw_text(c, self.font_l, o["name"], 12 + off, y + 14, o["color"])
+        draw_text(c, self.font_s, o["title"], 12 + off, y + 31, (255, 214, 90) if o.get("champ") else (230, 232, 250))
+        if o.get("champ"):
+            c.blit(self.belt, (VW - 50 + off, y + 15))
 
     def draw_controls(self, c):
         bar = pygame.Surface((VW, 22), pygame.SRCALPHA)
@@ -1333,8 +1901,9 @@ class Game:
         label, gold = (170, 180, 215), (255, 232, 130)
         draw_text(c, self.font_s, "DAMAGE", 8, 13, label)
         draw_text(c, self.font_l, "%06d" % self.damage, 8, 22, gold)
-        draw_text(c, self.font_s, "BEST COMBO", VW - 8, 13, label, right=True)
-        draw_text(c, self.font_l, "x%d" % self.best, VW - 8, 22, gold, right=True)
+        val = "x%d" % self.best                       # one line, below the mode buttons
+        draw_text(c, self.font_m, val, VW - 8, 31, gold, right=True)
+        draw_text(c, self.font_s, "BEST COMBO", VW - 12 - self.font_m.size(val)[0], 33, label, right=True)
         if self.combo >= 2:
             draw_text(c, self.font_xl, "%d HIT COMBO!" % self.combo, VW // 2, 64, (255, 120, 100), center=True)
 
@@ -1349,14 +1918,14 @@ class Game:
 
         pygame.draw.rect(c, (20, 14, 30), (x - 1, y - 1, w + 2, h + 2))
         c.fill((52, 40, 62), (x, y, w, h))
-        hp, lag = f.hp / MAX_HP, f.hp_lag / MAX_HP
+        hp, lag = f.hp / f.max_hp, f.hp_lag / f.max_hp
         seg(hp, lag, (255, 255, 255))
         col = (90, 220, 110) if hp > 0.5 else ((240, 210, 70) if hp > 0.25 else (236, 70, 60))
         if f.healing and int(self.clock * 8) % 2:
             col = (160, 255, 170)
         seg(0, hp, col)
         seg(0, hp, tuple(min(255, v + 50) for v in col), y, 1)
-        cap = f.regen_cap / MAX_HP
+        cap = f.regen_cap / f.max_hp
         tx = x + (w - int(round(w * cap)) if mirror else int(round(w * cap)))
         c.fill((236, 240, 255), (tx, y - 2, 1, h + 4))
         gy = y + h + 3
@@ -1367,23 +1936,54 @@ class Game:
 
     def draw_spar_hud(self, c):
         label = (170, 180, 215)
+        camp = self.mode == "campaign"
         draw_text(c, self.font_s, "YOU", 8, 13, label)
-        draw_text(c, self.font_s, "CPU  " + self.ai.level, VW - 8, 13, label, right=True)
+        name = self.opp["short"] if camp else "CPU  " + self.ai.level
+        draw_text(c, self.font_s, name, VW - 8, 13, self.opp["color"] if camp else label, right=True)
+        if camp and self.opp.get("champ"):
+            c.blit(self.belt_small, (VW - 8 - self.font_s.size(name)[0] - 21, 13))
         self.draw_bar(c, 8, 24, 76, self.player, False)
         self.draw_bar(c, VW - 8 - 76, 24, 76, self.cpu, True)
         secs = int(math.ceil(self.round_time))
         tcol = (255, 232, 130) if secs > 10 or int(self.clock * 4) % 2 else (255, 90, 80)
         draw_text(c, self.font_l, "%02d" % secs, VW // 2, 32, tcol, center=True)
+        if camp:
+            draw_text(c, self.font_s, "FIGHT %d/%d" % (self.stage + 1, len(CAMPAIGN)), VW // 2 - 14, 36, label,
+                      right=True)
         if self.combo >= 2 and self.phase == "fight":
             draw_text(c, self.font_xl, "%d HIT COMBO!" % self.combo, VW // 2, 64, (255, 120, 100), center=True)
 
+        gold, white = (255, 214, 90), (230, 232, 250)
         if self.phase == "intro":
             self.banner(c, 50, 44)
             msg = "ROUND 1" if self.phase_t < 0.9 else "FIGHT!"
             draw_text(c, self.font_huge, msg, VW // 2, 54, (255, 232, 130), center=True)
-            draw_text(c, self.font_s, "1 EASY   2 NORMAL   3 HARD", VW // 2, 83, label, center=True)
+            sub = ("FIGHT %d OF %d" % (self.stage + 1, len(CAMPAIGN))) if camp else "1 EASY   2 NORMAL   3 HARD"
+            draw_text(c, self.font_s, sub, VW // 2, 83, label, center=True)
         elif self.phase == "ko":
-            draw_text(c, self.font_huge, "K.O.!", VW // 2, 58, (255, 90, 80), center=True)
+            msg = "TIME!" if self.end_reason == "time" else "K.O.!"
+            draw_text(c, self.font_huge, msg, VW // 2, 58, (255, 90, 80), center=True)
+        elif self.phase == "walkin":
+            self.draw_name_card(c)
+        elif self.phase == "victory":
+            self.banner(c, 40, 36)
+            draw_text(c, self.font_xl, "VICTORY!", VW // 2, 43, (120, 240, 140), center=True)
+            nxt = CAMPAIGN[self.stage + 1]
+            draw_text(c, self.font_s, "%d OF %d DOWN   -   NEXT UP: %s" % (self.stage + 1, len(CAMPAIGN), nxt["short"]),
+                      VW // 2, 63, white, center=True)
+            if int(self.clock * 2.5) % 2 == 0:
+                draw_text(c, self.font_s, "PRESS ENTER FOR THE NEXT FIGHT", VW // 2, 66 + 10, gold, center=True)
+        elif self.phase == "defeat" and self.step >= 2:
+            self.banner(c, 36, 28)
+            draw_text(c, self.font_l, "DEFEATED", VW // 2, 38, (255, 90, 80), center=True)
+            draw_text(c, self.font_s, "ENTER  TRY AGAIN FROM FIGHT 1        TAB  BACK TO BAG", VW // 2, 52, white,
+                      center=True)
+        elif self.phase == "champion":
+            pulse = (255, 214, 90) if int(self.clock * 4) % 2 else (255, 250, 200)
+            draw_text(c, self.font_l, "NEW LIGHTWEIGHT CHAMPION!", VW // 2, 40, pulse, center=True)
+            if self.phase_t > 1.5 and self.step >= 2:
+                draw_text(c, self.font_s, "ENTER  DEFEND YOUR TITLE (NEW CAMPAIGN)        TAB  BAG", VW // 2, 58,
+                          white, center=True)
         elif self.phase == "result":
             self.banner(c, 46, 56)
             col = (120, 240, 140) if self.result == "YOU WIN!" else ((255, 232, 130) if self.result == "DRAW" else (255, 90, 80))
@@ -1424,6 +2024,8 @@ def handle_key(game, key):
         game.press(PUNCH_KEYS[key])
     elif key == pygame.K_TAB:
         game.toggle_mode()
+    elif key == pygame.K_c:
+        game.start_campaign()
     elif key == pygame.K_BACKSPACE:
         game.reset()
     elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
@@ -1968,495 +2570,6 @@ AAAAAAAAAAAAAAAYfW6iNl+StiemD3gTeUrKJJ+M+TvRkxcrN+Zz35jy/vnHTlzITUJpEk9KveSTlAOw
 AAAAAAAAAAAAAAAAAAAAAMAYyksCunTpuiTp2MSO3D9L8klg6/n/A3+Ha/Q8holbAAAAAElFTkSuQmCC
 """
 
-OPP_B64 = """
-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
-F8V+c7a8LvD56YXbh793216D+fs49kHIPG7d/52f/1bf+flv9a//8Lf6x7/7a31jx32648J3dceF7+rkqaM6+T8uauH6/2ssUY3b
-PrBvpZqQ5JN5e4lGCRHHuWNqabDP65adx6auTZbaPQBmvwv2eyBN97sQGnPfXETeemPTP+PNourcj2/eDfFC1n7z5tzsdRee8fpC
-6h23/ykpPPnklI2x2mKSZht2ojeUs5/zsmfeTkTgzjPkzfWwDzpMzNlTKTv3UDTnYy49ot6pL2Sc5UuG657PMGMojNhzcDF8bXDp
-OSRx4bVtcOly/h7Psj4n46rqqs59GmX1zTTP1xSJnfM35x5Jvtcst96/mZMsTZqq615oT8xZYBK9deNfjv8i87Gb9PDqjc8yH3/n
-57/VkVNXJFGfVfXysy8Nx7imz27OYw2ST44cPfHJ2C9JwzJAPNMe2OcbQ39J1El1+eIvjc6OmhwcN4tbUv8Aecqycpvb2Fy9mRVe
-gAaE3oRnM4uQxL+6kNuQ8uIvMSlUR1ns826AtBeBzWbP3796n7bvWaufPhwkRaFcxrmZn32xL4r7jv3ZG95feOw2/ejV8ZvZJHED
-YSBzA0NMPfSDi6PP23XQ6urqcAJ0w4YNPP+RqpSFbZDUhDYhBjHvTlM3QZr/2sk/ST5ZrM7ts9Lo9sGyzVfG5h0HtCRp9sPT3My2
-xnfjpj0Znb19aqOe3POpntxTfOsjC8TxYm/CK7qFtujAI8aFjAGMsjEYG02aY9rjGA8+/072Y+e/tqIDFtRdfkVl4i4km40Tj+y9
-S5evLUmSFvrLzM81IOTdcMvjkb2DxWS7LOxnnOd9IO8wpBvzkPbat7D/+N7NeuX8oJ3Yvi27hkAZZNkxj+kfuWPjHfsHh8E4KFOM
-+f/JwPpXWqz/phNa5/vKgPg3J2ROgjJoR0w7bOMQdn2h6wA8++2JmYez0QeqJnQONG/+U1Jm7cvsQxmbc2btK6PL9UeUG82Nlfd9
-dt35/9euxzbq3StfDj+3f/tgS+u+pz/X4sUzmb1BUvZ9ICloM3564fZMEsp9T/vXg33y1sSmea049B14+dmXMm3Avqc/H5aBmWsL
-Xoec4nahqfXHHfsHv2cOrh27eluk80uS/G2vqfNRnb1ekvcufOfnv5Uk/es//O3wc7t6W7Srt0UbHx/0f1ZeOTSW5DBvvxD7Vtrj
-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
-noccuwAAAABJRU5ErkJggg==
-"""
 
 if __name__ == "__main__":
     main()
