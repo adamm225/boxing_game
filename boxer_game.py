@@ -151,11 +151,12 @@ F_WIN = (53, 54)
 # Each action is a list of sprite frames with a duration (ms) per frame.
 #   active : frames in which the glove can connect      cancel : index from which you can chain
 #   lunge  : extra px slid forward on each frame         dmg/kick/shake/stop : bag-mode feel
+#   reach  : extra hit distance on top of the sprite's own reach (the long, snapping jab)
 #   target : head/body   spar_dmg : sparring damage   guard : guard drain when blocked
 #   stun   : hit-stun on the victim (seconds)
 ACTIONS = {
     "jab": dict(frames=[3, 4, 5, 6, 7], ms=[70, 90, 40, 120, 60], active={6}, cancel=4,
-                lunge=[0, 1, 2, 2, 1], dmg=8, kick=0.7, shake=1, stop=0.045,
+                lunge=[0, 2, 5, 7, 4], reach=5, dmg=8, kick=0.7, shake=1, stop=0.045,
                 target="head", spar_dmg=5, guard=14, stun=0.22),
     "cross": dict(frames=[12, 13, 14, 15, 16, 17], ms=[110, 40, 140, 90, 70, 80], active={14, 15},
                   cancel=4, lunge=[0, 1, 3, 3, 2, 1], dmg=22, kick=1.6, shake=3, stop=0.085,
@@ -1841,7 +1842,7 @@ class Game:
             spec = ACTIONS[n]
             reach = max(self.fist[fr][0] - HIP_X + spec["lunge"][i]
                         for i, fr in enumerate(spec["frames"]) if fr in spec["active"])
-            self.ranges[n] = reach + HURT[spec["target"]] + 3
+            self.ranges[n] = reach + spec.get("reach", 0) + HURT[spec["target"]] + 3
 
         self.bg = make_background()
         self.bag = Bag()
@@ -1870,6 +1871,8 @@ class Game:
         self.hover = None
         self.ref = Referee(self)
         self.hype = 0.0
+        self.busy = 0.0
+        self.seen_ids = [0, 0]
         self.slowmo = 0.0
         self.dn = None
         self.mash, self.mash_need = 0.0, MASH_NEED
@@ -1935,6 +1938,8 @@ class Game:
         self.shake, self.shake_t, self.hitstop, self.flash_t = 0, 0.0, 0.0, 0.0
         self.combo, self.combo_t = 0, 0.0
         self.slowmo = 0.0
+        self.busy = 0.0
+        self.seen_ids = [0, 0]
         self.dn = None
         self.mash = 0.0
         self.thud_pending = None
@@ -1952,12 +1957,15 @@ class Game:
             return 0.0
         champ = self.opp.get("champ")
         if self.phase in ("walkin", "talk", "reply"):
-            return 0.35 if champ else 0.22
+            return 0.2 if champ else 0.1
         if self.phase == "champion":
             return 0.95
         if self.phase == "defeat":
-            return 0.12
-        return 0.3 if champ else 0.2
+            return 0.04
+        base = 0.1 if champ else 0.05            # a fairly quiet crowd...
+        if self.phase == "fight":
+            base += min(0.4, self.busy * 0.5)    # ...that gets loud when it's a brawl
+        return base
 
     def reset_bag(self):
         self.mode = "bag"
@@ -2205,7 +2213,12 @@ class Game:
 
     def update_audio(self, dt):
         base = self.hype_base()
-        self.hype += (base - self.hype) * min(1.0, dt * (0.35 if self.hype > base else 1.5))
+        for f in (self.player, self.cpu):        # punches thrown by either boxer make the fight 'busy'
+            if f.attack_id != self.seen_ids[f is self.cpu]:
+                self.seen_ids[f is self.cpu] = f.attack_id
+                self.busy = min(1.0, self.busy + 0.11)
+        self.busy = max(0.0, self.busy - 0.22 * dt)
+        self.hype += (base - self.hype) * min(1.0, dt * (0.4 if self.hype > base else 1.5))
         if self.mode == "campaign":
             self.crowd.update(dt, self.hype)
         ch, loop = self.crowd_ch, self.sounds.get("crowd_loop")
@@ -2214,7 +2227,7 @@ class Game:
         if self.mode == "campaign" and not self.muted:
             if not ch.get_busy():
                 ch.play(loop, loops=-1, fade_ms=600)
-            ch.set_volume(0.18 + 0.75 * self.hype)
+            ch.set_volume(0.09 + 0.85 * self.hype)
         elif ch.get_busy():
             ch.fadeout(400)
 
@@ -2374,7 +2387,7 @@ class Game:
         if frame not in spec["active"]:
             return
         target = spec["target"]
-        reach = self.fist[frame][0] - HIP_X + att.lunge()
+        reach = self.fist[frame][0] - HIP_X + att.lunge() + spec.get("reach", 0)
         dist = (d.x - att.x) * att.facing
         full = reach + HURT[target] + 3
         if dist <= 0 or full < dist:
@@ -2524,7 +2537,7 @@ class Game:
             self.snd("hit_body_big" if big else "hit_body")
         else:
             self.snd("hit_cross" if big else "hit_jab")
-        self.excite(0.04 + 0.07 * imp)
+        self.excite(0.015 + 0.012 * imp * imp)    # jabs barely stir them; big shots really do
         if self.arena and imp >= 2.7:
             self.snd("ooh")
 
@@ -2761,6 +2774,7 @@ class Game:
         if frame not in spec["active"]:
             return
         wx, wy = p.tip(frame)
+        wx += spec.get("reach", 0)
         top, bottom = self.bag.top_bottom()
         if not (top - 2 <= wy <= bottom + 2):
             return
