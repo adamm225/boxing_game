@@ -7,6 +7,7 @@ Starts in BAG mode (free practice on a heavy bag). Next to the BOXING GYM sign:
     CAMPAIGN  (or C)    four fights back to back for the lightweight title belt
     BAG                 back to the heavy bag
 
+    i  (bottom-left)   the controls panel - hover it, click it, or press I / F1
     LEFT / RIGHT       move (you always face right)
     A                  jab
     S                  cross
@@ -20,6 +21,29 @@ Starts in BAG mode (free practice on a heavy bag). Next to the BOXING GYM sign:
     1 / 2 / 3          sparring difficulty (easy / normal / hard)
     ENTER              rematch after a fight
     M  mute     F11  fullscreen     ESC  quit
+
+Wind (stamina)
+    * Every punch costs wind - a cross costs twice a jab. Blocking and walking cost a little too.
+      Stop punching and it comes back; stand still and breathe and it comes back faster.
+    * Empty the tank and you are GASSED: slower hands, weaker punches, a guard that caves in and
+      a chin that will not hold up. Pace yourself. Rushing in is how you lose a fight you were winning.
+
+Feints
+    * SHIFT (or G) + a punch key throws a FEINT: the first half of the punch, snapped back. It can't
+      hurt anyone and costs almost no wind - but he has to respect it.
+    * If he commits to a block or a slip that was never needed, you've got him: land in the next
+      moment and the punch does far more damage ("FEINTED HIM!").
+    * Keep throwing the same feint and he stops biting. Space them out and they work again.
+
+He is watching you
+    * The computer learns what you throw. Lean on one punch and he starts slipping it and
+      countering; he also learns which punch you like to follow it with. "HE'S READING YOU" means
+      mix it up. The harder the opponent, the faster he reads you.
+
+Clinch and ropes
+    * Q grabs hold of him. You both get tied up until the referee breaks it, and while you are in
+      there you get your wind and your head back. Grab from too far out and you're wide open.
+    * Backed onto the ropes you cannot retreat and punches land much harder. Cut the ring off.
 
 Sparring rules
     * Both fighters have HP. Go a few seconds without taking damage and you slowly heal,
@@ -131,6 +155,33 @@ COUNT_DT = 0.72              # seconds per count
 STANDING_COUNT = 8           # a fighter who gets up still takes a count to eight
 MASH_NEED = 8                # key presses to get up from your first knockdown (more for later ones)
 MASH_DECAY = 1.1             # the get-up meter drains this many presses per second
+# ============================================================ clinch and ropes
+CLINCH_RANGE = 14            # how far past touching distance you can reach to tie him up
+CLINCH_TIME = 1.25           # seconds before the referee pulls you apart
+CLINCH_CD = 2.6              # you can't just hold on all night
+CLINCH_STAM = 26.0           # wind recovered per second while you're holding on
+CLINCH_DAZE = 34.0           # dizziness cleared per second while you're holding on
+CLINCH_WHIFF = 0.55          # grabbed at air: that long wide open
+ROPE_ZONE = 16               # within this of the ring edge you are ON THE ROPES
+ROPE_IMPACT = 1.3            # punches land this much harder on a man pinned there
+ROPE_SHOVE = 2.2             # extra push into the ropes
+
+# ============================================================ stamina
+# Every punch costs wind. Stand off and it comes back; throw non-stop and you GAS OUT:
+# slower hands, weaker punches, a softer chin and a guard that drains faster.
+STAM_MAX = 100
+STAM_COST = {"jab": 5.0, "cross": 11.0, "body_jab": 5.5, "body_cross": 12.0, "slip": 3.5, "feint": 2.0}
+STAM_MISS = 1.5              # extra cost for a punch that hits nothing (wild swings tire you out)
+STAM_BLOCK = 7.0             # cost of soaking up a punch on the gloves
+STAM_HIT = 4.0               # cost of taking one clean
+STAM_HOLD = 14.0              # cost per second of sitting behind a high/low guard
+STAM_MOVE = 1.6              # cost per second of walking
+STAM_REGEN = 11.5            # recovered per second when you give yourself a breather...
+STAM_REGEN_DELAY = 0.55      # ...this long after your last punch
+STAM_REGEN_IDLE = 1.8        # standing still (not walking, not blocking) recovers this much faster
+GAS_LINE = 30                # below this you are GASSED
+STAM_DOWN_COST = 22          # a knockdown takes it out of you
+STAM_RISE = 55               # stamina you get up with
 PLAYER_CHIN = 1.1            # your chin (the computer boxers' chins are in CAMPAIGN; sparring CPU = 1.0)
 STOPPAGE_HITS = 5            # unanswered clean shots on a HURT fighter before the ref stops it
 
@@ -171,6 +222,21 @@ ACTIONS = {
                  cancel=3, lunge=[0, 0, -1, -1, 0, 0]),
 }
 PUNCHES = ("jab", "cross", "body_jab", "body_cross")
+
+# ============================================================ feints
+# A feint is the first half of a punch, snapped back before it lands. It costs almost no wind and
+# can't hurt anyone - but the other guy reacts to it, and reacting is what you're hunting for.
+FEINT_OF = {}                # feint action name -> the punch it imitates
+for _n in PUNCHES:
+    _p = ACTIONS[_n]
+    ACTIONS["feint_" + _n] = dict(frames=[_p["frames"][0], _p["frames"][1], _p["frames"][0]],
+                                  ms=[50, 85, 80], active=set(), cancel=2,
+                                  lunge=[_p["lunge"][0], _p["lunge"][1], 0], target=_p["target"])
+    FEINT_OF["feint_" + _n] = _n
+FEINTS = tuple(FEINT_OF)
+THREATS = PUNCHES + FEINTS   # everything the other man has to respect
+BAIT_WINDOW = 0.75           # land a punch this soon after he bites on a feint and you've FEINTED him
+BAIT_MULT = 1.45             # impact bonus for that punch
 COUNTER_WINDOW = 0.6         # seconds after the bottom of a slip in which a punch is a counter
 COUNTER_MULT = 1.5
 BUFFER_TIME = 0.8            # a key pressed up to this long before you can act is queued (one action)
@@ -180,14 +246,15 @@ BUFFER_TIME = 0.8            # a key pressed up to this long before you can act 
 #   slip   : chance to slip a head shot instead of blocking     wrong : blocks the wrong height
 #   parry  : chance a block is perfectly timed    atk : seconds between attack decisions
 #   combo / flurry / punish : chance to throw combos / flurry a blocker / punish a whiff
-#   guard_up : how often it just sits behind its guard
+#   guard_up : how often it just sits behind its guard    learn : how fast it reads your habits
+#   feint    : how often it throws feints of its own      pace : how well it rations its wind
 LEVELS = {
     "EASY": dict(react=0.30, delay=(0.13, 0.30), slip=0.15, wrong=0.30, parry=0.0, atk=(1.0, 2.2),
-                 combo=0.20, flurry=0.25, punish=0.20, guard_up=0.10),
+                 combo=0.20, flurry=0.25, punish=0.20, guard_up=0.10, learn=0.3, feint=0.0, pace=0.45),
     "NORMAL": dict(react=0.65, delay=(0.07, 0.16), slip=0.25, wrong=0.12, parry=0.30, atk=(0.6, 1.4),
-                   combo=0.35, flurry=0.50, punish=0.55, guard_up=0.20),
-    "HARD": dict(react=0.8, delay=(0.04, 0.11), slip=0.30, wrong=0.06, parry=0.45, atk=(0.35, 0.95),
-                 combo=0.50, flurry=0.70, punish=0.70, guard_up=0.25),
+                   combo=0.35, flurry=0.50, punish=0.55, guard_up=0.20, learn=1.0, feint=0.18, pace=0.8),
+    "HARD": dict(react=0.8, delay=(0.04, 0.11), slip=0.30, wrong=0.06, parry=0.45, atk=(0.45, 1.1),
+                 combo=0.50, flurry=0.70, punish=0.70, guard_up=0.25, learn=1.5, feint=0.3, pace=1.0),
 }
 LEVEL_KEYS = ["EASY", "NORMAL", "HARD"]
 
@@ -249,11 +316,12 @@ SPAR_LOOK = dict(glove=(52, 110, 230), shorts=(196, 40, 52), skin=(170, 108, 70)
 #   style  : how much he likes each punch        hp/power/speed/walk : health, punch damage,
 #   taunt  : pre-fight animation                                       animation speed, footspeed
 #   chin   : how much punishment his head takes before he drops      heart : how hard he fights to beat the count
+#   wind   : his gas tank - how slowly he tires and how fast he recovers
 CAMPAIGN = [
     dict(name='RICK "RUSTY" MALONE', short="RUSTY RICK", title="JOURNEYMAN   -   RECORD 8-11",
          color=(150, 230, 160), look=dict(glove=(236, 236, 242), shorts=(56, 156, 84), skin=(250, 200, 156),
                                           hair=(196, 88, 40)),
-         level="EASY", ai=dict(), style=dict(jab=1.6), hp=80, power=0.9, speed=1.0, walk=1.0, taunt="shadowbox", chin=0.85, heart=0.8,
+         level="EASY", ai=dict(pace=0.4), style=dict(jab=1.6), hp=80, power=0.9, speed=1.0, walk=1.0, taunt="shadowbox", chin=0.85, heart=0.8, wind=0.75,
          intro="Fresh meat! Hope you packed a lunch, 'cause you're about to get SERVED!",
          reply="Order up, Rusty. Hope you like it extra crispy.",
          win="Ha! Back to the punching bag, rookie!",
@@ -261,9 +329,9 @@ CAMPAIGN = [
     dict(name='BRUNO "THE BULLDOZER" KASK', short="BULLDOZER", title="HEAVY HITTER   -   RECORD 14-4",
          color=(255, 170, 90), look=dict(glove=(240, 128, 40), shorts=(52, 48, 64), skin=(214, 150, 100),
                                          hair="bald", boots=(52, 48, 64)),
-         level="NORMAL", ai=dict(react=0.45, slip=0.08, parry=0.2, atk=(0.8, 1.6)),
+         level="NORMAL", ai=dict(react=0.45, slip=0.08, parry=0.2, atk=(0.8, 1.6), pace=0.5, feint=0.08),
          style=dict(jab=0.6, cross=2.5, body_cross=2.5), hp=120, power=1.12, speed=0.92, walk=0.85, taunt="roar",
-         chin=1.2, heart=1.2,
+         chin=1.2, heart=1.2, wind=0.8,
          intro="NOTHING stops the Bulldozer! I'm gonna flatten you like a PANCAKE!",
          reply="Even bulldozers run out of gas, big guy.",
          win="FLATTENED! Somebody scrape this guy off my canvas!",
@@ -272,9 +340,9 @@ CAMPAIGN = [
          color=(200, 160, 255), look=dict(glove=(150, 70, 214), shorts=(240, 206, 56), skin=(232, 182, 132),
                                           hair=(34, 34, 48)),
          level="NORMAL", ai=dict(react=0.78, slip=0.5, parry=0.35, delay=(0.05, 0.12), atk=(0.45, 1.0),
-                                 combo=0.55, punish=0.65),
+                                 combo=0.55, punish=0.65, pace=1.0, feint=0.3, learn=1.2),
          style=dict(jab=2.5, body_jab=1.5), hp=95, power=1.0, speed=1.18, walk=1.35, taunt="weave",
-         chin=0.92, heart=1.0,
+         chin=0.92, heart=1.0, wind=1.35,
          intro="Better not blink. I'll be done before your health bar even loads!",
          reply="Lightning never strikes twice. I do.",
          win="Too slow! Try again in slow motion.",
@@ -282,8 +350,8 @@ CAMPAIGN = [
     dict(name='VICTOR "THE CROWN" REYES', short="THE CROWN", title="LIGHTWEIGHT CHAMPION   -   RECORD 40-0",
          color=(255, 214, 90), champ=True,
          look=dict(glove=(44, 40, 54), shorts=(232, 180, 56), skin=(196, 128, 88), hair=(26, 22, 28)),
-         level="HARD", ai=dict(parry=0.5), style=dict(), hp=130, power=1.12, speed=1.06, walk=1.1, taunt="belt",
-         chin=1.2, heart=1.45,
+         level="HARD", ai=dict(parry=0.5, pace=1.1, feint=0.34), style=dict(), hp=122, power=1.08, speed=1.06, walk=1.1, taunt="belt",
+         chin=1.15, heart=1.45, wind=1.15,
          intro="Forty fights. Forty knockouts. You want my belt? Come and take it... if you dare.",
          reply="I didn't come here to lose. That belt is MINE.",
          win="You were never on my level.",
@@ -1171,6 +1239,35 @@ class Referee:
         c.blit(img, (int(self.x) - 22, GROUND - 65))
 
 
+# ============================================================ the info button
+INFO_CENTER = (15, VH - 13)      # the little "i" in the bottom-left corner
+INFO_D, INFO_D_HOVER = 17, 21    # its size normally / under the pointer
+INFO_PANEL = pygame.Rect(8, 2, VW - 16, 156)
+MOVE_ROWS = (("ARROWS", "MOVE"), ("A", "JAB"), ("S", "CROSS"), ("D", "BODY JAB"), ("F", "BODY CROSS"),
+             ("W", "SLIP"), ("E HOLD", "HIGH BLOCK"), ("R HOLD", "LOW BLOCK"), ("SHIFT+A..F", "FEINT"),
+             ("Q", "CLINCH"))
+FIGHT_TIPS = ("Slip then punch = COUNTER", "Block late = PARRY", "Flurries break a guard",
+              "Body shots cut healing", "Feint him, then land big", "Empty WIND = GASSED",
+              "On the ropes = hurt more", "3 knockdowns = T.K.O.", "Mash A S D F to get up")
+
+
+def make_info_icon(d, fill, ring, glyph, ring_w=1, halo=3):
+    """A round, see-through "i" badge, on a soft dark halo so it reads over anything."""
+    pad = 4
+    s = pygame.Surface((d + pad * 2, d + pad * 2), pygame.SRCALPHA)
+    r = d // 2
+    mid = (d // 2 + pad, d // 2 + pad)
+    for k in range(halo, 0, -1):                                 # soft shadow around the badge
+        pygame.draw.circle(s, (6, 5, 14, 42), mid, r + k)
+    pygame.draw.circle(s, fill, mid, r)
+    pygame.draw.circle(s, ring, mid, r, ring_w)
+    w = int(round(d / 8.0))
+    x = mid[0] - w // 2
+    s.fill(glyph, (x, int(mid[1] - d * 0.28), w, w))             # the dot
+    s.fill(glyph, (x, int(mid[1] - d * 0.08), w, int(d * 0.36)))  # the stem
+    return s
+
+
 class Bag:
     W0 = 3.8          # pendulum frequency (rad/s) - higher = snappier swing
     DAMP = 0.45       # air resistance
@@ -1231,11 +1328,12 @@ class Fighter:
         self.configure()
         self.reset(72)
 
-    def configure(self, max_hp=MAX_HP, power=1.0, speed=1.0, walk=1.0, chin=1.0, heart=1.0):
+    def configure(self, max_hp=MAX_HP, power=1.0, speed=1.0, walk=1.0, chin=1.0, heart=1.0, wind=1.0):
         """Per-boxer stats: health, punch damage multiplier, animation speed, footspeed,
-        chin (how much his head can take) and heart (how hard he fights to beat the count)."""
+        chin (how much his head can take), heart (how hard he fights to beat the count)
+        and wind (his gas tank: how slowly he tires and how fast he gets his breath back)."""
         self.max_hp, self.power, self.speed, self.walk = float(max_hp), power, speed, walk
-        self.chin, self.heart = chin, heart
+        self.chin, self.heart, self.wind = chin, heart, wind
 
     def reset(self, x):
         self.x = float(x)
@@ -1266,6 +1364,18 @@ class Fighter:
         self.ko_style = "kneel"        # how a finished fighter is shown: kneel / stand (ref stoppage)
         self.end_t = 0.0
         self.ghosts = []
+        # --- clinch
+        self.clinch = False
+        self.clinch_t = 0.0
+        self.clinch_cd = 0.0
+        # --- feints
+        self.bait_t = 0.0              # >0: he bit on your feint, hit him NOW
+        self.feinted_t = 0.0           # >0: you just threw a feint
+        # --- stamina
+        self.stam = float(STAM_MAX)
+        self.stam_t = 99.0             # seconds since the last punch thrown
+        self.gassed = False
+        self.puff_t = 0.0              # breathing-hard puffs
         # --- knockdown system
         self.daze, self.daze_t = 0.0, 99.0   # hidden concussion meter (head shots)
         self.body_dmg = 0.0                  # hidden body damage (for liver shots)
@@ -1284,11 +1394,29 @@ class Fighter:
     # ------------------------------------------------------------ state queries
     def busy(self):
         return (self.ko or self.won or self.stun_t > 0 or self.hitstun > 0 or self.down or self.out_cold
-                or self.liver_t > 0)
+                or self.liver_t > 0 or self.clinch)
 
     def spd(self):
-        """Animation speed right now (a hurt fighter's punches come slower)."""
-        return self.speed * (0.82 if self.hurt else 1.0)
+        """Animation speed right now: hurt and gassed fighters punch slower."""
+        return self.speed * (0.82 if self.hurt else 1.0) * (0.78 if self.gassed else 1.0)
+
+    def on_ropes(self):
+        """Backed up against the ring edge with nowhere to go."""
+        return (self.x - MIN_X < ROPE_ZONE) if self.facing > 0 else (STAGE_MAX_X - self.x < ROPE_ZONE)
+
+    def gas(self):
+        """0 at full wind, 1 when the tank is empty - how far into the red he is."""
+        if self.stam >= GAS_LINE:
+            return 0.0
+        return (GAS_LINE - self.stam) / GAS_LINE
+
+    def punch_power(self):
+        """Damage multiplier: tired arms don't carry the same snap."""
+        return self.power * (1.0 - 0.3 * self.gas())
+
+    def spend(self, amount):
+        self.stam = max(0.0, self.stam - amount / self.wind)
+        self.gassed = self.stam < GAS_LINE
 
     def slipping(self):
         return self.action == "slip" and 1 <= self.idx <= 4
@@ -1321,6 +1449,13 @@ class Fighter:
         self.buffer = None
         self.moving = 0
         self.block = None
+        self.spend(STAM_COST["feint"] if name in FEINTS else STAM_COST.get(name, 5.0))
+        self.stam_t = 0.0
+        if name in FEINTS:
+            self.attack_id += 1        # it looks exactly like the real thing coming
+            self.feinted_t = 0.4
+            self.game.snd("swish")
+            return
         if name == "slip":
             self.counter_t = 0.0
             self.ghosts.append(self.make_ghost())
@@ -1382,6 +1517,8 @@ class Fighter:
                 r = self.rising_t
                 return F_KO[2] if r < 0.2 else (F_KO[1] if r < 0.42 else F_KO[0])
             return F_KO[0] if self.down_t < 0.12 else (F_KO[1] if self.down_t < 0.42 else F_KO[2])
+        if self.clinch:
+            return F_BLOCK_HIGH[1]
         if self.liver_t > 0:
             return F_HIT_BODY[1]
         if self.ko and self.ko_style == "stand":
@@ -1410,6 +1547,9 @@ class Fighter:
     # ------------------------------------------------------------ update
     def update(self, dt, move, min_x, max_x):
         self.counter_t = max(0.0, self.counter_t - dt)
+        self.bait_t = max(0.0, self.bait_t - dt)
+        self.clinch_cd = max(0.0, self.clinch_cd - dt)
+        self.feinted_t = max(0.0, self.feinted_t - dt)
         self.parry_cd = max(0.0, self.parry_cd - dt)
         self.block_hit_t = max(0.0, self.block_hit_t - dt)
         for g in self.ghosts:
@@ -1427,6 +1567,24 @@ class Fighter:
         else:
             self.hp_lag = self.hp
 
+        # stamina: recovers once you stop punching, fastest when you stand off and breathe
+        self.stam_t += dt
+        if self.stam_t >= STAM_REGEN_DELAY and not (self.down or self.out_cold):
+            rate = STAM_REGEN * self.wind
+            if not self.block and not self.moving and not self.action:
+                rate *= STAM_REGEN_IDLE
+            self.stam = min(float(STAM_MAX), self.stam + rate * dt)
+        if self.block:
+            self.spend(STAM_HOLD * dt)
+        elif self.moving:
+            self.spend(STAM_MOVE * dt)
+        self.gassed = self.stam < GAS_LINE
+        if self.gassed and not (self.down or self.out_cold or self.ko):
+            self.puff_t -= dt
+            if self.puff_t <= 0:
+                self.puff_t = random.uniform(0.35, 0.6)
+                self.game.puff(self)
+
         # concussion / body damage wear off slowly
         self.daze_t += dt
         if self.daze_t >= DAZE_DELAY:
@@ -1435,6 +1593,14 @@ class Fighter:
             self.hurt = False
             self.unanswered = 0
         self.body_dmg = max(0.0, self.body_dmg - BODY_DECAY * dt)
+        if self.clinch:                          # tied up: catch your breath and clear your head
+            self.stam = min(float(STAM_MAX), self.stam + CLINCH_STAM * dt)
+            self.gassed = self.stam < GAS_LINE
+            self.daze = max(0.0, self.daze - CLINCH_DAZE * dt)
+            if self.hurt and self.daze < HURT_EXIT:
+                self.hurt = False
+            self.moving = 0
+            return
         if self.down or self.out_cold:
             self.down_t += dt
             self.fall_t += dt
@@ -1610,6 +1776,7 @@ class AI:
         self.level = name
         self.params = dict(LEVELS[name], **(overrides or {}))
         self.style = dict(style or {})
+        self.learn_rate = self.params.get("learn", 1.0)
 
     def reset(self):
         L = self.params
@@ -1625,8 +1792,46 @@ class AI:
         self.foe_body = []
         self.foe_times = []
         self.clock = 0.0
+        # --- reading the man in front of him
+        self.habit = {n: 1.0 for n in PUNCHES}   # decaying count of what the other guy throws
+        self.last_punch = None
+        self.pairs = {}                          # (punch, next punch) -> how often he does it
+        self.expect = None                       # the punch he is expecting next
+        self.feint_wise = 0.0                    # how wise he currently is to your feints (it fades)
+        self.read_t = 0.0                        # >0 while he has your number (shown on screen)
+
+    def learn(self, name):
+        """Remember what he keeps throwing, and what he likes to throw after it."""
+        for k in self.habit:
+            self.habit[k] *= 0.93                # old habits fade
+        self.habit[name] = self.habit.get(name, 1.0) + 1.0
+        if self.last_punch:
+            key = (self.last_punch, name)
+            self.pairs[key] = self.pairs.get(key, 0.0) + 1.0
+            nxt = max(((v, k[1]) for k, v in self.pairs.items() if k[0] == name), default=(0, None))
+            self.expect = nxt[1] if nxt[0] >= 2.5 else None
+        self.last_punch = name
+
+    def share(self, name):
+        tot = sum(self.habit.values())
+        return self.habit.get(name, 0.0) / tot if tot else 0.25
+
+    def read_bonus(self, name):
+        """How well he has your number on this punch: 0 if you mix it up, up to ~0.3 if you spam one."""
+        over = self.share(name) - 0.33
+        if self.expect == name:
+            over += 0.1                          # and he saw this one coming in the combo
+        b = clamp(over * 0.9 * self.learn_rate, 0.0, 0.3)
+        if b > 0.16:
+            self.read_t = 1.2
+        return b
 
     def choose_attack(self, L, foe):
+        pace = L.get("pace", 1.0)
+        if self.me.stam < 45 * pace:              # low on wind: pick your shots, mostly jabs
+            if self.me.stam < 26 * pace:
+                return ["jab"]
+            return random.choice([["jab"], ["jab"], ["jab", "jab"], ["body_jab"], ["jab", "cross"]])
         if foe.hurt:                              # smells blood: power shots to finish him
             return random.choice([["jab", "cross", "cross"], ["cross", "body_cross", "cross"], ["jab", "cross"],
                                   ["body_jab", "cross", "cross"], ["cross", "cross"]])
@@ -1652,6 +1857,8 @@ class AI:
         R = self.game.ranges
         self.move = 0
         self.clock += dt
+        self.read_t = max(0.0, self.read_t - dt)
+        self.feint_wise = max(0.0, self.feint_wise - 0.3 * dt)   # space them out and they work again
         if me.busy():
             self.plan.clear()
             self.def_plan = None
@@ -1660,29 +1867,40 @@ class AI:
             return
         dist = me.x - foe.x
 
-        # --- notice punches coming in
-        if foe.action in PUNCHES and foe.attack_id != self.seen:
+        # --- notice punches (and feints) coming in
+        if foe.action in THREATS and foe.attack_id != self.seen:
             self.seen = foe.attack_id
+            feint = foe.action in FEINTS
+            real = FEINT_OF.get(foe.action, foe.action)
             target = ACTIONS[foe.action]["target"]
             self.foe_body = (self.foe_body + [target == "body"])[-4:]
             self.foe_times = [t for t in self.foe_times if self.clock - t < 1.2] + [self.clock]
             react = (L["react"] + (0.15 if me.hp < 0.35 * me.max_hp else 0.0)
-                     + (0.2 if len(self.foe_times) >= 3 else 0.0) + (0.18 if me.hurt else 0.0))
-            if dist <= R[foe.action] + 6 and random.random() < react:
-                if target == "head" and random.random() < L["slip"]:
+                     + (0.2 if len(self.foe_times) >= 3 else 0.0) + (0.18 if me.hurt else 0.0)
+                     + self.read_bonus(real))
+            if feint:
+                react *= clamp(1.0 - self.feint_wise * 0.15, 0.3, 1.0)    # he wises up to repeated feints
+            if dist <= R[real] + 6 and random.random() < react:
+                if target == "head" and random.random() < L["slip"] + 0.5 * self.read_bonus(real):
                     kind = "slip"
                 else:
                     kind = "high" if target == "head" else "low"
-                    if random.random() < L["wrong"]:
+                    if random.random() < max(0.0, L["wrong"] - self.read_bonus(real)):
                         kind = "low" if kind == "high" else "high"
                 if kind != "slip" and random.random() < L["parry"]:
-                    wait = max(0.0, time_to_active(foe) - 0.06)
-                    me.parry_ok = True
+                    wait = max(0.0, time_to_active(foe) - 0.06) if not feint else random.uniform(*L["delay"])
+                    me.parry_ok = not feint
                 else:
                     wait = random.uniform(*L["delay"])
                     me.parry_ok = False
                 self.def_plan = [kind, wait, 0.4]
                 self.plan.clear()
+                if feint:                       # he bought it - the opening is right now
+                    self.feint_wise += 1
+                    foe.bait_t = BAIT_WINDOW
+                    self.game.on_bait(me, foe)
+            if not feint:
+                self.learn(real)
 
         # --- defend
         blocking = None
@@ -1700,6 +1918,10 @@ class AI:
                 self.def_plan[2] -= dt
                 if self.def_plan[2] <= 0 and not (foe.action in PUNCHES and not foe.hit_done):
                     self.def_plan = None
+        if (dist <= MIN_SEP + CLINCH_RANGE and me.clinch_cd <= 0 and not foe.clinch
+                and (me.hurt or me.stam < 20) and random.random() < 1.3 * dt * 60 * dt):
+            self.game.try_clinch(me)              # tie him up and get your head clear
+            return
         if blocking is None and self.guard_t > 0:
             self.guard_t -= dt
             if foe.busy() or self.punish:
@@ -1719,17 +1941,23 @@ class AI:
                 self.plan = ["cross"] if random.random() < 0.6 else ["jab", "cross"]
         if foe.stun_t > 0 and not self.plan and dist <= R["cross"]:
             self.plan = random.choice([["cross", "body_cross"], ["jab", "cross", "jab"], ["body_cross", "cross"]])
-        if foe.hurt and self.atk_t > 0.5 and dist <= R["cross"] + 4:
+        if foe.hurt and self.atk_t > 0.5 and dist <= R["cross"] + 4 and me.stam > 35 * L.get("pace", 1.0):
             self.atk_t = random.uniform(0.2, 0.5)    # go for the finish
         self.atk_t -= dt
         if self.atk_t <= 0 and not self.plan and not me.action:
             self.atk_t = (random.uniform(*L["atk"]) * (1.4 if me.hp < 0.3 * me.max_hp else 1.0)
-                          * (1.8 if me.hurt else 1.0) * (0.6 if foe.hurt else 1.0))
+                          * (1.8 if me.hurt else 1.0) * (0.6 if foe.hurt else 1.0)
+                          * (1.0 + 1.6 * me.gas()))     # blowing hard: throw less, breathe more
             if dist <= R["jab"] + 2:
                 self.plan = self.choose_attack(L, foe)
             else:
                 self.atk_t *= 0.3
         if self.plan and me.can_start(self.plan[0]):
+            nxt = self.plan[0]
+            if (nxt in PUNCHES and me.stam > 35 and foe.block is None and not foe.busy()
+                    and random.random() < L.get("feint", 0.0)):
+                me.press("feint_" + nxt)          # sell it first, then throw it
+                return
             me.press(self.plan.pop(0))
             if not self.plan and random.random() < 0.3:
                 self.retreat_t = random.uniform(0.25, 0.5)
@@ -1738,7 +1966,8 @@ class AI:
             return
 
         # --- sometimes just sit behind the guard (low guard if you keep going to the body)
-        if dist <= R["cross"] + 6 and random.random() < L["guard_up"] * dt * (8 if me.hurt else 2):
+        if (dist <= R["cross"] + 6 and me.stam > 30 * L.get("pace", 1.0)
+                and random.random() < L["guard_up"] * dt * (8 if me.hurt else 2)):
             self.guard_t = random.uniform(0.5, 1.1)
             self.guard_level = "low" if sum(self.foe_body) >= 2 else "high"
 
@@ -1749,6 +1978,8 @@ class AI:
         if self.retreat_t > 0:
             self.retreat_t -= dt
             self.move = 1
+        elif me.stam < 24 * L.get("pace", 1.0) and not foe.hurt and random.random() < 2.2 * dt:
+            self.retreat_t = random.uniform(0.8, 1.6)    # circle away and get the breath back
         elif me.hp < 0.3 * me.max_hp and me.hp < me.regen_cap and random.random() < 0.5 * dt:
             self.retreat_t = 1.4                 # back off to try to heal
         elif self.step_t > 0:
@@ -1869,10 +2100,20 @@ class Game:
         self.campaign_button = pygame.Rect(self.button.right + 3, self.button.y, cw, 13)
         self.arena_bg = make_arena_background(self.button.x)
         self.hover = None
+        self.info_icon = make_info_icon(INFO_D, (14, 12, 26, 120), (186, 194, 220, 175), (216, 222, 242, 195))
+        self.info_icon_hi = make_info_icon(INFO_D_HOVER, (9, 7, 18, 220), (255, 232, 130, 255),
+                                           (255, 244, 200, 255), ring_w=2)
+        self.info_rect = pygame.Rect(0, 0, INFO_D_HOVER + 4, INFO_D_HOVER + 4)
+        self.info_rect.center = INFO_CENTER
+        self.info_open = False
+        self.info_t = 0.0          # 0 shut, 1 fully open
+        self.info_seen = False     # has the player opened it yet?
+        self._panel = {}
         self.ref = Referee(self)
         self.hype = 0.0
         self.busy = 0.0
         self.seen_ids = [0, 0]
+        self.clinch_by = None
         self.slowmo = 0.0
         self.dn = None
         self.mash, self.mash_need = 0.0, MASH_NEED
@@ -1940,6 +2181,7 @@ class Game:
         self.slowmo = 0.0
         self.busy = 0.0
         self.seen_ids = [0, 0]
+        self.clinch_by = None
         self.dn = None
         self.mash = 0.0
         self.thud_pending = None
@@ -2001,7 +2243,8 @@ class Game:
         o = self.opp = CAMPAIGN[self.stage]
         p, c = self.player, self.cpu
         c.frames = self.campaign_frames[self.stage]
-        c.configure(o["hp"], o["power"], o["speed"], o["walk"], o.get("chin", 1.0), o.get("heart", 1.0))
+        c.configure(o["hp"], o["power"], o["speed"], o["walk"], o.get("chin", 1.0), o.get("heart", 1.0),
+                    o.get("wind", 1.0))
         p.reset(96)
         c.reset(372)                       # off screen - walks in
         self.ai.set_level(o["level"], o.get("ai"), o.get("style"))
@@ -2191,17 +2434,45 @@ class Game:
 
     def mouse(self, x, y, click):
         self.hover = None
-        if self.button.collidepoint(x, y):
+        if self.info_rect.collidepoint(x, y):
+            self.hover = "info"
+        elif self.info_open:
+            if click:
+                self.toggle_info()        # click anywhere off the panel to shut it
+            return
+        elif self.button.collidepoint(x, y):
             self.hover = "main"
         elif self.mode == "bag" and self.campaign_button.collidepoint(x, y):
             self.hover = "campaign"
-        if click and self.hover == "main":
+        if not click:
+            return
+        if self.hover == "info":
+            self.toggle_info()
+        elif self.hover == "main":
             self.toggle_mode()
-        elif click and self.hover == "campaign":
+        elif self.hover == "campaign":
             self.start_campaign()
 
+    def toggle_info(self):
+        self.info_open = not self.info_open
+        if self.info_open:
+            self.info_seen = True
+        self.player.want_block = self.cpu.want_block = None
+        self.player.buffer = self.cpu.buffer = None
+        self.snd("blip")
+
     # ------------------------------------------------------------ input
+    def clinch(self):
+        if self.info_open:
+            return
+        if self.mode != "bag" and self.phase == "fight":
+            self.try_clinch(self.player)
+
     def press(self, name):
+        if self.info_open:
+            return                                # the fight is paused while you read
+        if self.mode == "bag" and name in FEINTS:
+            name = FEINT_OF[name]                 # nothing to feint on a heavy bag
         if self.phase == "down" and self.mode != "bag" and self.dn and self.dn["who"] is self.player:
             if self.player.down and self.player.rising_t < 0:
                 self.mash += 1                    # mash to beat the count
@@ -2245,6 +2516,7 @@ class Game:
         self.texts.append(dict(s=s, x=x, y=y, vy=vy, t=0.0, life=life, color=color, font=font or self.font_m))
 
     def on_miss(self, f, frame):
+        f.spend(STAM_MISS)
         wx, wy = f.tip(frame)
         self.say("miss", wx - 8, wy - 8, (150, 156, 182), self.font_s, vy=-14, life=0.6)
         if f is self.player and self.mode != "bag":
@@ -2252,6 +2524,10 @@ class Game:
 
     # ------------------------------------------------------------ update
     def update(self, dt, left=False, right=False, down=False, block=False):
+        self.info_t = clamp(self.info_t + (dt * 6.5 if self.info_open else -dt * 7.5), 0.0, 1.0)
+        if self.info_open:                        # reading the controls pauses the fight
+            self.clock += dt
+            return
         if self.slowmo > 0:                       # slow motion on the big moments
             self.slowmo -= dt
             dt *= 0.35
@@ -2289,6 +2565,7 @@ class Game:
             self.resolve(p, c)
             self.resolve(c, p)
             self.separate()
+            self.update_clinch(dt)
             for f, o in ((p, c), (c, p)):
                 if f.liver_t > 0 and self.phase == "fight":
                     f.liver_t -= dt
@@ -2375,12 +2652,59 @@ class Game:
             p.x -= mp
             c.x += mc
 
+    # ------------------------------------------------------------ clinch
+    def try_clinch(self, f):
+        """Grab hold of the other man. In range it ties you both up; short and you're wide open."""
+        o = self.cpu if f is self.player else self.player
+        if f.busy() or f.clinch_cd > 0 or self.phase != "fight" or o.down or o.out_cold or o.ko:
+            return
+        f.finish_action()
+        f.block = f.want_block = None
+        f.buffer = None
+        f.clinch_cd = CLINCH_CD
+        if abs(o.x - f.x) > MIN_SEP + CLINCH_RANGE or o.clinch:
+            f.stagger(CLINCH_WHIFF)               # grabbed at thin air
+            self.say("WHIFF!", f.x - 14, GROUND - 62, (170, 180, 215), self.font_s, vy=-14, life=0.6)
+            self.snd("swish")
+            return
+        for g in (f, o):
+            g.finish_action()
+            g.block = g.want_block = None
+            g.buffer = None
+            g.hitstun = g.stun_t = 0.0
+            g.react = None
+            g.clinch, g.clinch_t = True, 0.0
+        o.clinch_cd = max(o.clinch_cd, 0.9)
+        self.ai.plan.clear()
+        self.ai.def_plan = None
+        self.clinch_by = f
+        self.say("CLINCH", (f.x + o.x) / 2 - 16, GROUND - 74, (200, 206, 232), self.font_m, vy=-10, life=0.8)
+        self.snd("block")
+
+    def update_clinch(self, dt):
+        p, c = self.player, self.cpu
+        if not (p.clinch or c.clinch):
+            return
+        p.clinch_t += dt
+        c.clinch_t += dt
+        t = max(p.clinch_t, c.clinch_t)
+        if t > CLINCH_TIME * 0.45 and not self.ref.on:
+            self.call_ref(self.cpu if self.clinch_by is self.player else self.player)
+        if t >= CLINCH_TIME:
+            for g in (p, c):
+                g.clinch, g.clinch_t = False, 0.0
+                g.push(-6)                        # the ref shoves them apart
+            self.ref.set_pose("wave_b", 0.35)
+            self.ref.leave()
+            self.say("BREAK!", VW // 2 - 22, 72, (255, 232, 130), self.font_l, vy=-8, life=0.8)
+            self.snd("count")
+
     def excite(self, amount):
         self.hype = min(1.0, self.hype + amount)
 
     # ------------------------------------------------------------ sparring hits
     def resolve(self, att, d):
-        if att.action not in PUNCHES or att.hit_done or d.ko or d.down or d.out_cold:
+        if att.action not in PUNCHES or att.hit_done or d.ko or d.down or d.out_cold or d.clinch:
             return
         spec = ACTIONS[att.action]
         frame = spec["frames"][att.idx]
@@ -2420,7 +2744,8 @@ class Game:
             self.excite(0.12)
             return
         d.unanswered = max(0, d.unanswered - 1)    # covering up shows the referee he's still in it
-        d.guard -= spec["guard"] * (1 + FLURRY_RAMP * d.block_chain)
+        d.spend(STAM_BLOCK)
+        d.guard -= spec["guard"] * (1 + FLURRY_RAMP * d.block_chain) * (1 + 0.6 * d.gas())
         d.block_chain += 1
         d.block_chain_t = FLURRY_WINDOW
         d.guard_t = 0.0
@@ -2442,7 +2767,7 @@ class Game:
     def impact(self, att, d, name, ext, counter_hit, walking_in, slip_counter, crit, stunned):
         """How HARD a clean punch landed, divided by the victim's chin. Compared with KD_IMPACT /
         KO_IMPACT to decide flash knockdowns and one-punch knockouts. Returns (impact, notes)."""
-        k = POWER[name] * att.power ** 0.7
+        k = POWER[name] * att.punch_power() ** 0.7
         k *= 0.78 + 0.37 * ext                    # flush at the end of the punch vs smothered
         if counter_hit:
             k *= 1.45                             # caught him mid-punch: he never saw it
@@ -2459,6 +2784,9 @@ class Game:
         k *= 1 + 0.3 * (1 - d.hp / d.max_hp)      # worn down
         k *= 1 + 0.12 * d.downs                   # been down before
         k *= 1 + 0.05 * min(d.unanswered, 4)      # eating punch after punch
+        if d.on_ropes():
+            k *= ROPE_IMPACT                      # nowhere to roll with it
+        k *= 1 + 0.35 * d.gas()                   # a gassed fighter's legs and neck can't hold him up
         k *= random.uniform(0.9, 1.1)
         return k / d.chin
 
@@ -2480,11 +2808,20 @@ class Game:
         crit = crit or random.random() < chance
         if crit:
             mult *= CRIT_MULT
+        baited = att.bait_t > 0
+        if baited:
+            att.bait_t = 0.0
+            mult *= 1.2
+            chance += 0.14
+            tags.insert(0, ("FEINTED HIM!", (160, 255, 190)))
         if counter_hit and ext > 0.7 and POWER[name] >= 2:
             tags.insert(0, ("PERFECT TIMING!", (255, 255, 160)))
         imp = self.impact(att, d, name, ext, counter_hit, walking_in, att.is_counter, crit, stunned)
-        dmg = max(1, int(round(spec["spar_dmg"] * mult * att.power)))
+        if baited:
+            imp *= BAIT_MULT
+        dmg = max(1, int(round(spec["spar_dmg"] * mult * att.punch_power())))
         d.hp = max(0.0, d.hp - dmg)
+        d.spend(STAM_HIT)
         d.since_damage = 0.0
         att.dealt += dmg
         att.unanswered = 0
@@ -2497,7 +2834,7 @@ class Game:
             scale = d.max_hp / MAX_HP
             d.regen_cap = max(REGEN_CAP_MIN * scale, d.regen_cap - BODY_CAP_LOSS * scale)
         d.get_hit(target, spec["stun"] + (0.25 if crit else 0.0))
-        d.push(12 if crit else (7 if spec["guard"] > 20 else 4))
+        d.push((12 if crit else (7 if spec["guard"] > 20 else 4)) + (ROPE_SHOVE if not d.on_ropes() else 0))
         if d is self.player:
             self.combo, self.combo_t = 0, 0.0
         else:
@@ -2620,6 +2957,7 @@ class Game:
         o = att
         self.fall_down(d)
         d.down, d.down_t, d.rising_t = True, 0.0, -1.0
+        d.spend(STAM_DOWN_COST)
         d.downs += 1
         o.kds += 1
         final = d.downs >= MAX_DOWNS
@@ -2747,6 +3085,8 @@ class Game:
         scale = d.max_hp / MAX_HP
         d.regen_cap = max(REGEN_CAP_MIN * scale, min(d.regen_cap, after + 10 * scale))
         d.daze, d.hurt = 30.0, False
+        d.stam = max(d.stam, float(STAM_RISE))
+        d.gassed = d.stam < GAS_LINE
         d.body_dmg *= 0.5
         d.guard = float(GUARD_MAX)
         d.unanswered = 0
@@ -2756,6 +3096,19 @@ class Game:
                  vy=-10, life=1.2)
         self.snd("cheer" if self.arena else "block")
         self.excite(0.5)
+
+    def on_bait(self, biter, feinter):
+        """The other man committed to defending a punch that was never coming."""
+        hx, hy = biter.head_pos()
+        self.say("BIT ON IT!", hx - 26, hy - 20, (160, 255, 190), self.font_m, vy=-14, life=0.7)
+        if feinter is self.player:
+            self.excite(0.06)
+
+    def puff(self, f):
+        """A little breath cloud off a fighter who is sucking wind."""
+        hx, hy = f.head_pos()
+        self.parts.append([hx + f.facing * 6, hy + 2, f.facing * random.uniform(14, 26),
+                           random.uniform(-26, -12), random.uniform(0.3, 0.5), (210, 225, 245)])
 
     def dust(self, x):
         for _ in range(16):
@@ -2866,6 +3219,8 @@ class Game:
                 self.draw_dizzy(c, f)
             if p.counter_t > 0 and int(p.counter_t * 14) % 2 == 0 and self.phase == "fight":
                 draw_text(c, self.font_s, "COUNTER READY", p.x + 6, GROUND - 96, (120, 220, 255), center=True)
+        if self.mode != "bag" and self.phase in ("fight", "down"):
+            self.draw_ropes_flex(c)
         if self.mode == "campaign" and self.phase == "defeat":
             self.draw_defeat_mood(c)
         if self.mode != "bag" and p.hurt and self.phase == "fight":
@@ -2890,7 +3245,7 @@ class Game:
         else:
             self.draw_spar_hud(c)
         self.draw_button(c)
-        self.draw_controls(c)
+        self.draw_info(c)
 
         if self.flash_t > 0:
             fl = pygame.Surface((VW, VH), pygame.SRCALPHA)
@@ -2903,6 +3258,23 @@ class Game:
             ox = random.randint(-self.shake, self.shake)
             oy = random.randint(-self.shake, self.shake)
         out.blit(c, (ox, oy))
+
+    def draw_ropes_flex(self, c):
+        """The ropes bow outward behind a fighter who is pinned on them."""
+        if not self.arena:
+            return
+        for f in (self.player, self.cpu):
+            if not f.on_ropes() or f.down or f.out_cold:
+                continue
+            side = -1 if f.facing > 0 else 1          # which edge he is backed into
+            edge = POSTS[0] if side < 0 else POSTS[1]
+            for ry, col in zip(ROPES, ((220, 50, 60), (240, 240, 246), (60, 100, 220))):
+                bow = 4
+                x0 = edge + (4 if side < 0 else -4)
+                x1 = int(f.x) + side * 2
+                pts = [(x0, ry), ((x0 + x1) // 2, ry + bow), (x1, ry)]
+                pygame.draw.lines(c, (20, 18, 30), False, [(x, y + 1) for x, y in pts], 3)
+                pygame.draw.lines(c, col, False, pts, 2)
 
     def draw_sweep(self, c):
         """Two search lights sweeping the crowd before the fight and during the celebrations."""
@@ -2970,6 +3342,17 @@ class Game:
                 c.fill((200, 255, 210), (x, 92, int(w * f), 1))
         elif dn["up"] and n < STANDING_COUNT:
             draw_text(c, self.font_s, "STANDING EIGHT COUNT", VW // 2, 78, white, center=True)
+
+    def chip(self, c, text, x, y, col, center=False, right=False):
+        """Small label on its own dark plate, so warnings stay readable over the crowd."""
+        w = self.font_s.size(text)[0]
+        bx = x - w // 2 - 3 if center else (x - w - 3 if right else x - 2)
+        plate = pygame.Surface((w + 6, 11), pygame.SRCALPHA)
+        plate.fill((12, 10, 24, 205))
+        c.blit(plate, (bx, y - 1))
+        c.fill(darken(col, 0.55), (bx, y - 1, w + 6, 1))
+        c.fill(darken(col, 0.55), (bx, y + 9, w + 6, 1))
+        draw_text(c, self.font_s, text, bx + 3, y + 1, col)
 
     def draw_kd_pips(self, c, f, x, y, right):
         for i in range(MAX_DOWNS):
@@ -3067,16 +3450,68 @@ class Game:
         if o.get("champ"):
             c.blit(self.belt, (VW - 50 + off, y + 15))
 
-    def draw_controls(self, c):
-        bar = pygame.Surface((VW, 22), pygame.SRCALPHA)
-        bar.fill((10, 8, 20, 175))
-        c.blit(bar, (0, VH - 22))
-        col = (200, 206, 232)
-        draw_text(c, self.font_s, "ARROWS MOVE   A JAB   S CROSS   D BODY JAB   F BODY CROSS",
-                  VW // 2, VH - 20, col, center=True)
+    def panel_surface(self):
+        """The contents of the open panel (cached; only the mode word changes)."""
         mode = "SPAR" if self.mode == "bag" else "BAG"
-        draw_text(c, self.font_s, "W SLIP   E BLOCK   R LOW BLOCK   BKSP RESET   TAB " + mode,
-                  VW // 2, VH - 11, col, center=True)
+        if mode in self._panel:
+            return self._panel[mode]
+        w, h = INFO_PANEL.size
+        s = pygame.Surface((w, h), pygame.SRCALPHA)
+        gold, white, label = (255, 214, 90), (232, 236, 250), (165, 175, 210)
+        draw_text(s, self.font_m, "CONTROLS & MOVES", w // 2, 3, gold, center=True)
+        s.fill((70, 60, 92), (10, 18, w - 20, 1))
+        lx, rx = 8, 154
+        draw_text(s, self.font_s, "YOUR MOVES", lx, 23, label)
+        draw_text(s, self.font_s, "HOW TO WIN", rx, 23, label)
+        for i, (key, what) in enumerate(MOVE_ROWS):
+            y = 36 + i * 9
+            draw_text(s, self.font_s, key, lx, y, gold)
+            draw_text(s, self.font_s, what, lx + 56, y, white)
+        for i, tip in enumerate(FIGHT_TIPS):
+            y = 36 + i * 9
+            s.fill((120, 110, 150), (rx + 1, y + 4, 2, 2))
+            draw_text(s, self.font_s, tip, rx + 7, y, white)
+        s.fill((70, 60, 92), (10, h - 25, w - 20, 1))
+        draw_text(s, self.font_s, "TAB  %s        C  CAMPAIGN        BKSP  RESET" % mode,
+                  w // 2, h - 22, label, center=True)
+        draw_text(s, self.font_s, "ENTER  CONTINUE     M  MUTE     F11  FULL     ESC  CLOSE",
+                  w // 2, h - 12, label, center=True)
+        self._panel[mode] = s
+        return s
+
+    def draw_info(self, c):
+        t = self.info_t
+        if t > 0:
+            ease = 1 - (1 - t) ** 3
+            dim = pygame.Surface((VW, VH), pygame.SRCALPHA)
+            dim.fill((6, 5, 16, int(165 * t)))
+            c.blit(dim, (0, 0))
+            r = pygame.Rect(0, 0, int(self.info_rect.w + (INFO_PANEL.w - self.info_rect.w) * ease),
+                            int(self.info_rect.h + (INFO_PANEL.h - self.info_rect.h) * ease))
+            r.centerx = int(self.info_rect.centerx + (INFO_PANEL.centerx - self.info_rect.centerx) * ease)
+            r.centery = int(self.info_rect.centery + (INFO_PANEL.centery - self.info_rect.centery) * ease)
+            plate = pygame.Surface(r.size, pygame.SRCALPHA)
+            plate.fill((14, 12, 26, 244))
+            c.blit(plate, r.topleft)
+            pygame.draw.rect(c, (92, 80, 120), r, 1)
+            c.fill((255, 214, 90), (r.x + 1, r.y, r.w - 2, 1))
+            if t > 0.5:
+                body = self.panel_surface()
+                body.set_alpha(int(255 * min(1.0, (t - 0.5) / 0.4)))
+                c.set_clip(r)
+                c.blit(body, INFO_PANEL.topleft)
+                c.set_clip(None)
+        hot = self.hover == "info" or self.info_open
+        img = self.info_icon_hi if hot else self.info_icon
+        c.blit(img, img.get_rect(center=INFO_CENTER))
+        if not self.info_seen and t <= 0 and self.clock < 30:
+            fade = min(1.0, (30 - self.clock) / 3.0) * (0.55 + 0.45 * math.sin(self.clock * 3))
+            a = int(215 * fade)
+            hx, hy = INFO_CENTER[0] + 15, INFO_CENTER[1] - 4
+            for col, off in (((10, 8, 20), (1, 1)), ((214, 220, 240), (0, 0))):
+                hint = self.font_s.render("CONTROLS", False, col)
+                hint.set_alpha(a)
+                c.blit(hint, (hx + off[0], hy + off[1]))
 
     def draw_bag_hud(self, c):
         label, gold = (170, 180, 215), (255, 232, 130)
@@ -3114,6 +3549,16 @@ class Game:
         c.fill((40, 40, 64), (x, gy, w, 3))
         gcol = (90, 170, 255) if f.guard > 30 else ((255, 120, 90) if int(self.clock * 8) % 2 else (200, 80, 60))
         seg(0, f.guard / GUARD_MAX, gcol, gy, 3)
+        sy = gy + 4                                      # wind (stamina)
+        pygame.draw.rect(c, (20, 14, 30), (x - 1, sy - 1, w + 2, 5))
+        c.fill((46, 42, 36), (x, sy, w, 3))
+        if f.gassed:
+            scol = (255, 180, 60) if int(self.clock * 7) % 2 else (190, 120, 40)
+        else:
+            scol = (240, 214, 110)
+        seg(0, f.stam / STAM_MAX, scol, sy, 3)
+        gx = x + (w - int(round(w * GAS_LINE / STAM_MAX)) if mirror else int(round(w * GAS_LINE / STAM_MAX)))
+        c.fill((120, 100, 70), (gx, sy, 1, 3))
 
     def draw_spar_hud(self, c):
         label = (170, 180, 215)
@@ -3125,14 +3570,25 @@ class Game:
             c.blit(self.belt_small, (VW - 8 - self.font_s.size(name)[0] - 21, 13))
         self.draw_bar(c, 8, 24, 76, self.player, False)
         self.draw_bar(c, VW - 8 - 76, 24, 76, self.cpu, True)
-        self.draw_kd_pips(c, self.player, 8, 40, False)
-        self.draw_kd_pips(c, self.cpu, VW - 8, 40, True)
+        self.draw_kd_pips(c, self.player, 8, 44, False)
+        self.draw_kd_pips(c, self.cpu, VW - 8, 44, True)
         secs = int(math.ceil(self.round_time))
         tcol = (255, 232, 130) if secs > 10 or int(self.clock * 4) % 2 else (255, 90, 80)
         draw_text(c, self.font_l, "%02d" % secs, VW // 2, 32, tcol, center=True)
         if camp:
             draw_text(c, self.font_s, "FIGHT %d/%d" % (self.stage + 1, len(CAMPAIGN)), VW // 2 - 14, 36, label,
                       right=True)
+        if self.phase == "fight":
+            for f, fx, rt in ((self.player, 8, False), (self.cpu, VW - 8, True)):
+                warn = None
+                if f.gassed:
+                    warn, wcol = "GASSED", (255, 190, 70)
+                elif f.on_ropes() and not f.clinch:
+                    warn, wcol = "ON THE ROPES", (255, 130, 120)
+                if warn and int(self.clock * 3) % 2:
+                    self.chip(c, warn, fx, 50, wcol, right=rt)
+            if self.ai.read_t > 0 and int(self.clock * 4) % 2:
+                self.chip(c, "HE'S READING YOU - MIX IT UP", VW // 2, 88, (255, 160, 100), center=True)
         if self.combo >= 2 and self.phase == "fight":
             draw_text(c, self.font_xl, "%d HIT COMBO!" % self.combo, VW // 2, 64, (255, 120, 100), center=True)
 
@@ -3214,14 +3670,37 @@ def present(screen, canvas):
 PUNCH_KEYS = {pygame.K_a: "jab", pygame.K_s: "cross", pygame.K_d: "body_jab", pygame.K_f: "body_cross",
               pygame.K_w: "slip"}
 HIGH_BLOCK_KEY, LOW_BLOCK_KEY = pygame.K_e, pygame.K_r
+FEINT_KEYS = (pygame.K_LSHIFT, pygame.K_RSHIFT, pygame.K_g)   # hold + a punch = feint it
+CLINCH_KEY = pygame.K_q
+INFO_KEYS = (pygame.K_i, pygame.K_F1)             # open the controls panel
 
 
 def handle_key(game, key):
     """One key press. Returns False if the game should quit."""
+    if key in INFO_KEYS:
+        game.toggle_info()
+        return True
     if key == pygame.K_ESCAPE:
+        if game.info_open:
+            game.toggle_info()                    # shut the panel first, quit on the next press
+            return True
         return False
+    if game.info_open:
+        if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            game.toggle_info()
+        elif key == pygame.K_m:
+            game.toggle_mute()
+        elif key == pygame.K_F11:
+            pygame.display.toggle_fullscreen()
+        return True
     if key in PUNCH_KEYS:
-        game.press(PUNCH_KEYS[key])
+        name = PUNCH_KEYS[key]
+        held = pygame.key.get_pressed()
+        if name != "slip" and any(held[k] for k in FEINT_KEYS):
+            name = "feint_" + name
+        game.press(name)
+    elif key == CLINCH_KEY:
+        game.clinch()
     elif key == pygame.K_TAB:
         game.toggle_mode()
     elif key == pygame.K_c:
