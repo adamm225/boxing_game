@@ -29,9 +29,27 @@ Sparring rules
     * Critical hits do extra damage. Hitting someone mid-punch (counter hit), after a slip,
       or while they are stunned makes crits much more likely (stunned = guaranteed).
 
+Knockdowns and knockouts
+    * Run out of health and you go DOWN, you don't lose. The referee counts. MASH A/S/D/F
+      to beat the count; you get up with less health and he finishes a standing eight count.
+      Stay down until 10 and it's a K.O.  Three knockdowns in one fight = T.K.O.
+    * Every clean punch has an IMPACT. Big impact = a flash knockdown, or knocked OUT COLD
+      on the spot, even with health left. Impact goes up for:
+        - power punches (cross, body cross) over jabs
+        - landing at the end of your reach (flush) instead of smothered up close
+        - counter hits: catching him mid-punch or walking forward into it
+        - punching right after a slip or a parry, or into a broken guard
+        - a fighter who is HURT (wobbling, gloves down), worn out, or already been down
+        - long runs of unanswered punches
+      Head shots also build up a hidden daze: too many and he's HURT, more and he drops.
+      Body shots build up too - a hard body cross on a battered body is a LIVER SHOT.
+    * If a HURT fighter keeps eating punches without firing back, the referee stops it (T.K.O.).
+    * Go the distance and the judges decide (knockdowns count for a lot).
+
 Campaign
-    * Rusty Rick -> Bruno "The Bulldozer" -> "Lightning" Lee -> Victor "The Crown" Reyes,
-      the lightweight champion. Each has his own look, fighting style and trash talk.
+    * Fought in a packed arena: Rusty Rick -> Bruno "The Bulldozer" -> "Lightning" Lee ->
+      Victor "The Crown" Reyes, the lightweight champion. Each has his own look, chin,
+      fighting style and trash talk. The crowd reacts to every big punch.
     * You start every fight at full health. Lose once and you start over at fight 1.
     * ENTER / SPACE skips dialogue and moves on between fights.
 
@@ -92,6 +110,29 @@ MIN_SEP = 40                 # closest two boxers can stand (hip to hip)
 ROUND_TIME = 99
 HURT = {"head": 12, "body": 11}   # how far in front of the hips the head / body can be hit
 TARGET_Y = {"head": 30, "body": 46}
+
+# ============================================================ knockdowns / knockouts
+# A clean punch's IMPACT starts from its power and is multiplied by everything that made it land
+# hard (see Game.impact). Divided by the victim's chin, it's compared with these thresholds.
+POWER = {"jab": 1.0, "cross": 2.0, "body_jab": 0.9, "body_cross": 2.0}
+KD_IMPACT = 3.6              # from here a clean head shot can drop him (flash knockdown)
+KO_IMPACT = 5.0              # from here it can switch the lights off (out cold, no count)
+DAZE_HURT = 60               # daze meter: HURT (wobbling) from here...
+DAZE_DROP = 100              # ...and down he goes from here
+DAZE_DECAY = 13.0            # daze lost per second once he's had a breather...
+DAZE_DELAY = 1.4             # ...of this many seconds without a head shot
+HURT_EXIT = 38               # stops wobbling when daze drops below this
+LIVER_BODY = 34              # body damage soaked up before a body cross can fold him
+BODY_DECAY = 2.0             # body damage healed per second
+MAX_DOWNS = 3                # third knockdown = T.K.O.
+RISE_HP = (0.6, 0.38)        # health after getting up from the 1st / 2nd knockdown (x max HP)
+COUNT_START = 1.15           # seconds after the knockdown before the referee says "one"
+COUNT_DT = 0.72              # seconds per count
+STANDING_COUNT = 8           # a fighter who gets up still takes a count to eight
+MASH_NEED = 8                # key presses to get up from your first knockdown (more for later ones)
+MASH_DECAY = 1.1             # the get-up meter drains this many presses per second
+PLAYER_CHIN = 1.1            # your chin (the computer boxers' chins are in CAMPAIGN; sparring CPU = 1.0)
+STOPPAGE_HITS = 5            # unanswered clean shots on a HURT fighter before the ref stops it
 
 # ============================================================ animation frames
 IDLE_SEQ = [0, 1, 2, 1]      # guard "breathing" frames
@@ -206,11 +247,12 @@ SPAR_LOOK = dict(glove=(52, 110, 230), shorts=(196, 40, 52), skin=(170, 108, 70)
 #   look   : colours (see look_palette)          level/ai : AI difficulty + overrides (see LEVELS)
 #   style  : how much he likes each punch        hp/power/speed/walk : health, punch damage,
 #   taunt  : pre-fight animation                                       animation speed, footspeed
+#   chin   : how much punishment his head takes before he drops      heart : how hard he fights to beat the count
 CAMPAIGN = [
     dict(name='RICK "RUSTY" MALONE', short="RUSTY RICK", title="JOURNEYMAN   -   RECORD 8-11",
          color=(150, 230, 160), look=dict(glove=(236, 236, 242), shorts=(56, 156, 84), skin=(250, 200, 156),
                                           hair=(196, 88, 40)),
-         level="EASY", ai=dict(), style=dict(jab=1.6), hp=80, power=0.9, speed=1.0, walk=1.0, taunt="shadowbox",
+         level="EASY", ai=dict(), style=dict(jab=1.6), hp=80, power=0.9, speed=1.0, walk=1.0, taunt="shadowbox", chin=0.85, heart=0.8,
          intro="Fresh meat! Hope you packed a lunch, 'cause you're about to get SERVED!",
          reply="Order up, Rusty. Hope you like it extra crispy.",
          win="Ha! Back to the punching bag, rookie!",
@@ -219,7 +261,8 @@ CAMPAIGN = [
          color=(255, 170, 90), look=dict(glove=(240, 128, 40), shorts=(52, 48, 64), skin=(214, 150, 100),
                                          hair="bald", boots=(52, 48, 64)),
          level="NORMAL", ai=dict(react=0.45, slip=0.08, parry=0.2, atk=(0.8, 1.6)),
-         style=dict(jab=0.6, cross=2.5, body_cross=2.5), hp=120, power=1.2, speed=0.92, walk=0.85, taunt="roar",
+         style=dict(jab=0.6, cross=2.5, body_cross=2.5), hp=120, power=1.12, speed=0.92, walk=0.85, taunt="roar",
+         chin=1.2, heart=1.2,
          intro="NOTHING stops the Bulldozer! I'm gonna flatten you like a PANCAKE!",
          reply="Even bulldozers run out of gas, big guy.",
          win="FLATTENED! Somebody scrape this guy off my canvas!",
@@ -230,6 +273,7 @@ CAMPAIGN = [
          level="NORMAL", ai=dict(react=0.78, slip=0.5, parry=0.35, delay=(0.05, 0.12), atk=(0.45, 1.0),
                                  combo=0.55, punish=0.65),
          style=dict(jab=2.5, body_jab=1.5), hp=95, power=1.0, speed=1.18, walk=1.35, taunt="weave",
+         chin=0.92, heart=1.0,
          intro="Better not blink. I'll be done before your health bar even loads!",
          reply="Lightning never strikes twice. I do.",
          win="Too slow! Try again in slow motion.",
@@ -238,6 +282,7 @@ CAMPAIGN = [
          color=(255, 214, 90), champ=True,
          look=dict(glove=(44, 40, 54), shorts=(232, 180, 56), skin=(196, 128, 88), hair=(26, 22, 28)),
          level="HARD", ai=dict(parry=0.5), style=dict(), hp=130, power=1.12, speed=1.06, walk=1.1, taunt="belt",
+         chin=1.2, heart=1.45,
          intro="Forty fights. Forty knockouts. You want my belt? Come and take it... if you dare.",
          reply="I didn't come here to lose. That belt is MINE.",
          win="You were never on my level.",
@@ -355,11 +400,30 @@ def time_to_active(f):
     first = next(i for i, fr in enumerate(spec["frames"]) if fr in spec["active"])
     if f.idx >= first:
         return 0.0
-    return (sum(spec["ms"][f.idx:first]) - f.t) / 1000.0 / f.speed
+    return (sum(spec["ms"][f.idx:first]) - f.t) / 1000.0 / f.spd()
 
 
 # ============================================================ sound (synthesised, no files)
-def make_sounds():
+class BandPass:
+    """Resonant band-pass filter (biquad) - turns white noise into vowels, crowds, smacks."""
+
+    def __init__(self, rate, freq, q):
+        w = 2 * math.pi * freq / rate
+        alpha = math.sin(w) / (2 * q)
+        a0 = 1 + alpha
+        self.b0, self.b2 = alpha / a0, -alpha / a0
+        self.a1, self.a2 = -2 * math.cos(w) / a0, (1 - alpha) / a0
+        self.x1 = self.x2 = self.y1 = self.y2 = 0.0
+
+    def __call__(self, x):
+        y = self.b0 * x + self.b2 * self.x2 - self.a1 * self.y1 - self.a2 * self.y2
+        self.x2, self.x1, self.y2, self.y1 = self.x1, x, self.y1, y
+        return y
+
+
+def make_sounds(background=True):
+    """All sound effects. The crowd recordings take a moment to synthesise, so by default they're
+    made on a background thread and appear in the dict when ready."""
     snd = {}
     try:
         init = pygame.mixer.get_init()
@@ -370,54 +434,179 @@ def make_sounds():
             return snd
     except pygame.error:
         return snd
+    rnd = random.Random(1234)
+    noise = rnd.uniform
+    TAU = 2 * math.pi
 
-    def synth(dur, fn):
-        n = int(dur * rate)
+    def fade(vals, secs=0.03):
+        """Fade the last few ms out so nothing ends with a click."""
+        k = min(len(vals), int(secs * rate))
+        for i in range(k):
+            vals[len(vals) - k + i] *= 1 - (i + 1) / k
+        return vals
+
+    def lowpass(vals, cutoff, passes=2):
+        a = 1 - math.exp(-TAU * cutoff / rate)
+        for _ in range(passes):
+            y = 0.0
+            for i, x in enumerate(vals):
+                y += (x - y) * a
+                vals[i] = y
+        return vals
+
+    def to_sound(vals, gain=0.55):
         buf = array.array("h")
-        for i in range(n):
-            v = clamp(fn(i / rate, i / n), -1.0, 1.0)
-            s = int(v * 32767 * 0.55)
+        for v in vals:
+            s = int(clamp(v, -1.0, 1.0) * 32767 * gain)
             for _ in range(ch):
                 buf.append(s)
         return pygame.mixer.Sound(buffer=buf.tobytes())
+
+    def synth(dur, fn):
+        n = int(dur * rate)
+        return to_sound([fn(i / rate, i / n) for i in range(n)])
+
+    def reverb(vals, delays=(0.031, 0.047, 0.071), fb=0.32, tail=0.4):
+        out = list(vals) + [0.0] * int(tail * rate)
+        for d in delays:
+            k = int(d * rate)
+            for i in range(k, len(out)):
+                out[i] += out[i - k] * fb
+        peak = max(1e-6, max(abs(v) for v in out))
+        return fade([v / max(1.0, peak) for v in out], 0.15)
 
     def whoosh(dur, lo, hi, vol):
         state = [0.0]
 
         def fn(t, u):
             a = lo + (hi - lo) * u
-            state[0] += (random.uniform(-1, 1) - state[0]) * a
+            state[0] += (noise(-1, 1) - state[0]) * a
             return state[0] * (math.sin(math.pi * u) ** 2) * vol * 3.0
         return synth(dur, fn)
 
-    def thump(dur, f0, f1, vol, crack):
-        ph = [0.0]
+    def punch(dur, f0, f1, thud, smack, tone, sub=0.0, drive=1.6, decay=18):
+        """Layered glove impact: pitched thud + band-passed leather smack + transient click
+        (+ an optional sub-boom), soft-clipped together."""
+        n = int(dur * rate)
+        bp = BandPass(rate, tone, 1.1)
+        ph = 0.0
+        vals = []
+        norm = math.tanh(drive)
+        for i in range(n):
+            t = i / rate
+            f = f1 + (f0 - f1) * math.exp(-t * 38)
+            ph += TAU * f / rate
+            r = noise(-1, 1)
+            v = (math.sin(ph) * math.exp(-t * decay) * thud
+                 + bp(r) * 3.2 * math.exp(-t * 55) * smack
+                 + r * math.exp(-t * 420) * 0.45
+                 + math.sin(TAU * 46 * t) * math.exp(-t * 6.5) * sub * min(1.0, t * 400))
+            vals.append(math.tanh(v * drive) / norm)
+        return fade(vals)
 
-        def fn(t, u):
-            f = f1 + (f0 - f1) * math.exp(-t * 30)
-            ph[0] += 2 * math.pi * f / rate
-            body = math.sin(ph[0]) * math.exp(-t * 16)
-            click = random.uniform(-1, 1) * math.exp(-t * 60) * crack
-            return body * vol + click
-        return synth(dur, fn)
+    def ring_bell(base, dur, vol=1.0):
+        """Boxing-ring bell: hard strike + inharmonic partials that ring on."""
+        parts = ((1.0, 1.0, 2.2), (2.32, 0.55, 3.4), (4.25, 0.32, 5.0), (6.63, 0.2, 7.5), (0.5, 0.25, 1.6))
+        n = int(dur * rate)
+        vals = []
+        for i in range(n):
+            t = i / rate
+            v = sum(a * math.sin(TAU * base * m * t) * math.exp(-t * d) for m, a, d in parts)
+            v += noise(-1, 1) * math.exp(-t * 300) * 0.6
+            vals.append(v * 0.42 * vol)
+        return fade(vals, 0.08)
 
-    def bell(dur, base, vol):
-        def fn(t, u):
-            v = (math.sin(2 * math.pi * base * t) + 0.5 * math.sin(2 * math.pi * base * 1.5 * t)
-                 + 0.3 * math.sin(2 * math.pi * base * 2.76 * t))
-            return v * math.exp(-t * 3.2) * vol * 0.5
-        return synth(dur, fn)
+    def mix(*layers):
+        """layers: (start seconds, sample list, gain)"""
+        n = max(int(s * rate) + len(v) for s, v, _ in layers)
+        out = [0.0] * n
+        for s, v, gn in layers:
+            o = int(s * rate)
+            for i, x in enumerate(v):
+                out[o + i] += x * gn
+        return out
+
+    def crowd_noise(dur, formants, env, chatter=0.0, seed=0, lp=None):
+        """Lots of people at once: noise through vowel formants, with a slow random swell."""
+        r = random.Random(seed)
+        n = int(dur * rate)
+        filt = [(BandPass(rate, f, q), a) for f, q, a in formants]
+        lfo = [r.uniform(0, TAU) for _ in range(3)]
+        vals = []
+        g = 0.0
+        gate = 1.0
+        for i in range(n):
+            t = i / rate
+            x = r.uniform(-1, 1)
+            v = sum(f(x) * a for f, a in filt)
+            if chatter:                      # syllable-ish flutter from individual voices
+                if i % 600 == 0:
+                    gate = r.uniform(1 - chatter, 1.0)
+                g += (gate - g) * 0.004
+                v *= g
+            sw = 1 + 0.18 * math.sin(TAU * 0.31 * t + lfo[0]) + 0.1 * math.sin(TAU * 0.83 * t + lfo[1])
+            vals.append(v * sw * env(t, i / n))
+        return lowpass(vals, lp) if lp else vals
+
+    def voices(dur, count, lo, hi, contour, env, vib=5.0, seed=0, bright=0.35):
+        """A few dozen 'singing' voices sliding together - the OOOH / YEAH of a crowd."""
+        r = random.Random(seed)
+        n = int(dur * rate)
+        blk = 32                                 # pitch / loudness only change every 32 samples
+        nb = n // blk + 1
+        cont = [contour(min(1.0, b / nb)) for b in range(nb)]
+        envs = [env(min(1.0, b / nb)) for b in range(nb)]
+        out = [0.0] * (nb * blk)
+        sin = math.sin
+        for _ in range(count):
+            f0, p0, sp, late = r.uniform(lo, hi), r.uniform(0, TAU), r.uniform(0.85, 1.15), r.randint(-nb // 16, nb // 16)
+            ph = p0
+            for b in range(nb):
+                j = min(nb - 1, max(0, b - late))
+                f = f0 * cont[j] * (1 + 0.02 * sin(TAU * vib * sp * b * blk / rate + p0))
+                inc = TAU * f / rate
+                e = envs[j]
+                o = b * blk
+                for i in range(o, o + blk):
+                    ph += inc
+                    s = sin(ph)
+                    out[i] += (s + bright * s * s * s) * e
+        k = 1.0 / count
+        return [v * k for v in out[:n]]
 
     try:
         snd["swish"] = whoosh(0.11, 0.55, 0.12, 0.35)
         snd["slip"] = whoosh(0.20, 0.25, 0.08, 0.28)
-        snd["hit_jab"] = thump(0.16, 190, 80, 0.9, 0.35)
-        snd["hit_cross"] = thump(0.24, 150, 50, 1.0, 0.6)
-        snd["crit"] = thump(0.32, 130, 38, 1.0, 0.95)
-        snd["block"] = thump(0.09, 320, 200, 0.45, 0.5)
-        snd["parry"] = bell(0.30, 1250, 0.8)
-        snd["guard_break"] = thump(0.35, 260, 60, 0.9, 1.0)
-        snd["bell"] = bell(1.2, 880, 1.0)
+        snd["hit_jab"] = to_sound(punch(0.16, 210, 95, 0.75, 0.7, 1900, drive=1.4))
+        snd["hit_cross"] = to_sound(punch(0.28, 170, 62, 1.0, 0.9, 1500, sub=0.35, drive=2.0))
+        snd["hit_body"] = to_sound(punch(0.22, 120, 55, 1.0, 0.45, 650, sub=0.25, drive=1.8, decay=12))
+        snd["hit_body_big"] = to_sound(punch(0.34, 105, 42, 1.1, 0.5, 520, sub=0.6, drive=2.4, decay=9))
+        snd["crit"] = to_sound(reverb(punch(0.36, 160, 40, 1.1, 1.0, 1300, sub=0.8, drive=3.0), tail=0.25))
+        snd["block"] = to_sound(punch(0.10, 340, 220, 0.4, 0.9, 2600, drive=1.2, decay=30))
+        snd["parry"] = to_sound(mix((0, punch(0.08, 400, 300, 0.4, 1.0, 3000, drive=1.2), 0.8),
+                                    (0.01, ring_bell(1500, 0.35, 0.6), 0.6)))
+        snd["guard_break"] = to_sound(punch(0.38, 260, 60, 0.9, 1.0, 1100, sub=0.4, drive=2.5))
+        ding = ring_bell(760, 1.6)
+        snd["bell"] = to_sound(ding)
+        snd["bell3"] = to_sound(fade(mix((0, ding, 0.8), (0.3, ding, 0.8), (0.6, ding, 0.9)), 0.1))
+        clap = []
+        for i in range(int(0.16 * rate)):
+            t = i / rate
+            burst = sum(math.exp(-max(0.0, t - o) * 140) * (t >= o) for o in (0.0, 0.009, 0.019))
+            clap.append(noise(-1, 1) * burst * 0.5)
+        bp = BandPass(rate, 1400, 0.9)
+        clap = [bp(v) * 3 for v in clap]
+        snd["count"] = to_sound(mix((0, clap, 1.0), (0, punch(0.12, 160, 110, 0.6, 0.0, 800, drive=1.2), 0.6)))
+        fall = punch(0.6, 90, 38, 1.2, 0.6, 400, sub=0.9, drive=2.4, decay=7)
+        rattle = [math.sin(TAU * 1830 * i / rate) * math.exp(-i / rate * 5) * 0.12 * (1 + 0.5 * math.sin(TAU * 13 * i / rate))
+                  for i in range(int(0.7 * rate))]
+        snd["canvas"] = to_sound(fade(mix((0, fall, 1.0), (0.02, fade(rattle), 1.0))))
+        snd["ko_boom"] = to_sound(reverb(punch(0.6, 140, 34, 1.2, 1.0, 1100, sub=1.2, drive=3.5, decay=6),
+                                         delays=(0.043, 0.067, 0.097, 0.131), fb=0.38, tail=0.9))
+        beat = punch(0.18, 70, 45, 1.0, 0.1, 200, drive=1.5, decay=16)
+        snd["heartbeat"] = to_sound(mix((0, beat, 0.9), (0.2, beat, 0.6)), gain=0.7)
+        snd["ringing"] = synth(1.8, lambda t, u: (math.sin(TAU * 3650 * t) + 0.4 * math.sin(TAU * 3712 * t))
+                               * min(1.0, t / 0.05) * (1 - u) ** 2 * 0.22)
 
         def tones(notes, wave, vol):
             starts, acc = [], 0.0
@@ -433,8 +622,8 @@ def make_sounds():
                 f, d, vib = notes[i]
                 lt = t - starts[i]
                 if vib:
-                    f *= 1 + 0.04 * math.sin(2 * math.pi * 5.5 * lt) * min(1.0, lt / 0.25)
-                ph[0] += 2 * math.pi * f / rate
+                    f *= 1 + 0.04 * math.sin(TAU * 5.5 * lt) * min(1.0, lt / 0.25)
+                ph[0] += TAU * f / rate
                 env = min(1.0, lt / 0.02) * (1.0 - 0.45 * lt / d)
                 if lt > d - 0.03:
                     env *= max(0.0, (d - lt) / 0.03)
@@ -451,17 +640,63 @@ def make_sounds():
         snd["fanfare"] = tones([(523, .12, 0), (659, .12, 0), (784, .12, 0), (1047, .26, 0), (784, .12, 0),
                                 (1047, .7, 1)], square, 0.5)
         snd["blip"] = tones([(900, .022, 0)], square, 0.22)
-        crowd_state = [0.0, 0.0]
 
-        def crowd(t, u):
-            crowd_state[0] += (random.uniform(-1, 1) - crowd_state[0]) * 0.35
-            crowd_state[1] += (crowd_state[0] - crowd_state[1]) * 0.5
-            swell = 0.7 + 0.3 * math.sin(2 * math.pi * 1.3 * t) * math.sin(2 * math.pi * 0.7 * t)
-            env = min(1.0, t / 0.4) * min(1.0, (2.6 - t) / 0.9)
-            return crowd_state[1] * 2.2 * swell * env
-        snd["crowd"] = synth(2.6, crowd)
     except pygame.error:
         return {}
+
+    def crowd_sounds():
+        loop_len, xf = 6.0, 0.6
+        murmur = crowd_noise(loop_len + xf, ((420, 2.2, 1.0), (1050, 2.6, 0.55), (2400, 3.0, 0.18)),
+                             lambda t, u: 1.0, chatter=0.6, seed=3, lp=1500)
+        k = int(xf * rate)
+        n = int(loop_len * rate)
+        for i in range(k):                       # cross-fade the tail into the head = seamless loop
+            a = i / k
+            murmur[i] = murmur[i] * a + murmur[n + i] * (1 - a)
+        murmur = murmur[:n]
+        peak = max(abs(v) for v in murmur)
+        snd["crowd_loop"] = to_sound([v / peak * 0.55 for v in murmur], gain=0.6)
+
+        def swell(a, r):
+            return lambda u: min(1.0, u / a) * (1 - max(0.0, (u - r) / (1 - r))) ** 1.5
+
+        ooh = mix((0, voices(1.4, 14, 150, 300, lambda u: 1.0 + 0.18 * math.sin(math.pi * min(1, u * 1.4)) - 0.12 * u,
+                             swell(0.15, 0.45), seed=5, bright=0.15), 1.0),
+                  (0, crowd_noise(1.4, ((380, 3.5, 1.0), (800, 4.0, 0.4)), lambda t, u: swell(0.15, 0.45)(u),
+                                  seed=6, lp=1100), 0.25))
+        peak = max(abs(v) for v in ooh)
+        snd["ooh"] = to_sound([v / peak * 0.8 for v in ooh], gain=0.6)
+
+        def cheer(dur, seed, whistles):
+            env = swell(0.08, 0.35)
+            layers = [(0, crowd_noise(dur, ((750, 1.6, 1.0), (1250, 2.0, 0.7), (2600, 2.5, 0.25)),
+                                      lambda t, u: env(u), chatter=0.25, seed=seed, lp=2600), 1.0),
+                      (0, voices(dur, 10, 180, 380, lambda u: 1.0 + 0.25 * min(1, u * 5), env, vib=7, seed=seed + 1,
+                                 bright=0.5), 0.5)]
+            r = random.Random(seed)
+            for w in range(whistles):        # two-finger whistles
+                st, ln, fq = r.uniform(0.05, dur * 0.5), r.uniform(0.25, 0.5), r.uniform(2100, 3000)
+                wv = [math.sin(TAU * fq * (i / rate) * (1 + 0.08 * min(1, i / rate / 0.08)))
+                      * min(1, i / rate / 0.03) * (1 - i / (ln * rate)) for i in range(int(ln * rate))]
+                layers.append((st, wv, 0.12))
+            out = mix(*layers)
+            peak = max(abs(v) for v in out)
+            return [v / peak * 0.85 for v in out]
+
+        snd["cheer"] = to_sound(cheer(2.2, 11, 2), gain=0.6)
+        snd["roar"] = to_sound(cheer(3.6, 21, 5), gain=0.7)
+        snd["crowd"] = snd["cheer"]
+
+    def safe():
+        try:
+            crowd_sounds()
+        except pygame.error:
+            pass
+    if background:
+        import threading
+        threading.Thread(target=safe, daemon=True).start()
+    else:
+        safe()
     return snd
 
 
@@ -607,6 +842,334 @@ def make_bag_surface():
     return s
 
 
+# ============================================================ the arena (campaign)
+RING_BACK = 128              # y of the back edge of the ring canvas
+ROPES = (92, 104, 116)       # y of the back ropes
+POSTS = (7, VW - 8)          # x of the ring posts
+ARENA_SIGN = "FIGHT NIGHT"
+CROWD_ROWS = ((60, 0.50, 7, 0), (70, 0.62, 8, 0), (81, 0.76, 9, 1), (93, 0.92, 10, 1))   # head y, light, spacing, size
+SHIRTS = [(200, 60, 70), (60, 110, 200), (230, 230, 236), (40, 40, 52), (226, 180, 60), (70, 160, 90),
+          (150, 80, 180), (230, 120, 50), (90, 190, 210), (120, 120, 140), (190, 60, 120)]
+SKINS = [(240, 196, 150), (214, 160, 112), (180, 120, 80), (130, 84, 56), (96, 62, 44), (250, 214, 176)]
+HAIRS = [(30, 24, 30), (80, 50, 30), (200, 160, 80), (140, 60, 30), (160, 160, 170), (20, 20, 24)]
+
+
+def arena_tint(c, light):
+    """Crowd colours sit in the dark: dimmed and pushed toward the arena blue."""
+    return tuple(int(clamp(v * light * 0.82 + b * (1 - light) * 0.35, 0, 255)) for v, b in zip(c, (40, 46, 90)))
+
+
+def make_arena_background(button_x):
+    rnd = random.Random(11)
+    bg = pygame.Surface((VW, VH))
+    for y in range(VH):                                   # dark bowl, a little lighter low down
+        k = y / VH
+        bg.fill((int(12 + 14 * k), int(10 + 12 * k), int(26 + 26 * k)), (0, y, VW, 1))
+
+    # upper deck: rows of far-away fans, aisles and stairs
+    for y in range(13, 56, 4):
+        light = 0.18 + 0.3 * (y - 13) / 43
+        bg.fill(arena_tint((60, 60, 90), light), (0, y + 2, VW, 1))
+        x = rnd.uniform(0, 3)
+        while x < VW:
+            col = arena_tint(rnd.choice(SHIRTS), light * 0.9)
+            bg.fill(col, (int(x), y + 1, 2, 2))
+            bg.fill(arena_tint(rnd.choice(SKINS), light), (int(x), y, 2, 1))
+            x += rnd.uniform(2.6, 4.2)
+    for ax in (52, 160, 268):                              # aisles
+        bg.fill((14, 12, 28), (ax - 4, 12, 8, 46))
+        for y in range(14, 56, 3):
+            bg.fill((34, 32, 56), (ax - 4, y, 8, 1))
+    bg.fill((26, 22, 44), (0, 55, VW, 3))                 # balcony front
+    bg.fill((70, 64, 110), (0, 55, VW, 1))
+    for x in range(4, VW, 22):
+        bg.fill((255, 214, 120), (x, 56, 2, 1))           # little balcony lamps
+
+    # rafters / lighting truss
+    bg.fill((8, 8, 16), (0, 0, VW, 9))
+    for x in range(0, VW, 6):
+        pygame.draw.line(bg, (40, 40, 60), (x, 1), (x + 6, 7))
+    bg.fill((56, 56, 80), (0, 1, VW, 1))
+    bg.fill((56, 56, 80), (0, 7, VW, 1))
+    for lx in (34, 96, 160, 224, 286):
+        bg.fill((20, 20, 30), (lx - 4, 7, 9, 5))
+        bg.fill((255, 250, 220), (lx - 2, 11, 5, 1))
+
+    # sponsor boards behind the ring
+    bf = pygame.font.Font(None, 13)
+    bg.fill((14, 16, 40), (0, 101, VW, 14))
+    bg.fill((60, 70, 140), (0, 101, VW, 1))
+    ads = [("KO COLA", (236, 70, 70)), ("IRONJAW GYM", (240, 210, 90)), ("PUNCH TV", (110, 200, 255)),
+           ("BOXER", (255, 120, 170)), ("GLOVE-X", (140, 230, 150))]
+    x, i = 2, 0
+    while x < VW:
+        text, col = ads[i % len(ads)]
+        img = bf.render(text, False, col)
+        bg.blit(img, (x, 104))
+        x += img.get_width() + 16
+        bg.fill((40, 46, 90), (x - 9, 103, 1, 10))
+        i += 1
+
+    # the ring: canvas, posts, ropes, apron
+    for y in range(RING_BACK, VH):
+        k = (y - RING_BACK) / (VH - RING_BACK)
+        bg.fill((int(150 + 60 * k), int(158 + 56 * k), int(186 + 40 * k)), (0, y, VW, 1))
+    bg.fill((96, 104, 140), (0, RING_BACK, VW, 1))
+    logo = pygame.Surface((150, 26), pygame.SRCALPHA)
+    pygame.draw.ellipse(logo, (120, 40, 70, 60), (0, 0, 150, 26))
+    pygame.draw.ellipse(logo, (255, 255, 255, 40), (8, 3, 134, 20), 1)
+    lf = pygame.font.Font(None, 20)
+    t = lf.render("CHAMPIONSHIP", False, (255, 255, 255))
+    t.set_alpha(70)
+    logo.blit(t, (75 - t.get_width() // 2, 7))
+    bg.blit(logo, (VW // 2 - 75, 134))
+    bg.fill((160, 30, 50), (0, 162, VW, VH - 162))      # apron skirt (mostly under the controls bar)
+    bg.fill((210, 70, 90), (0, 162, VW, 1))
+    for px, pad in ((POSTS[0], (210, 40, 56)), (POSTS[1], (50, 90, 210))):
+        bg.fill((20, 18, 30), (px - 2, 82, 5, RING_BACK - 82 + 4))
+        bg.fill((150, 150, 170), (px - 1, 82, 3, RING_BACK - 82 + 3))
+        bg.fill((210, 210, 226), (px - 1, 82, 1, RING_BACK - 82 + 3))
+        for ry in ROPES:
+            bg.fill((20, 18, 30), (px - 4, ry - 3, 9, 7))
+            bg.fill(pad, (px - 3, ry - 2, 7, 5))
+            bg.fill(lighten(pad, 0.4), (px - 3, ry - 2, 7, 1))
+    for ry, col in zip(ROPES, ((220, 50, 60), (240, 240, 246), (60, 100, 220))):
+        bg.fill((20, 18, 30), (POSTS[0] + 4, ry - 1, POSTS[1] - POSTS[0] - 8, 3))
+        bg.fill(col, (POSTS[0] + 4, ry - 1, POSTS[1] - POSTS[0] - 8, 2))
+        bg.fill(lighten(col, 0.5), (POSTS[0] + 4, ry - 1, POSTS[1] - POSTS[0] - 8, 1))
+
+    # sign next to the mode button
+    f = pygame.font.Font(None, 20)
+    w = f.size(ARENA_SIGN)[0]
+    sx = button_x - 6 - w
+    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        bg.blit(f.render(ARENA_SIGN, False, (110, 60, 10)), (sx + dx, SIGN_POS[1] + dy))
+    bg.blit(f.render(ARENA_SIGN, False, (255, 214, 90)), (sx, SIGN_POS[1]))
+    return bg
+
+
+def make_arena_lights():
+    """Additive light: beams from the truss onto the ring + a pool of light on the canvas."""
+    s = pygame.Surface((VW, VH))                     # added on top (BLEND_RGB_ADD): keep it dark
+    for lx in (96, 160, 224):
+        cone = pygame.Surface((VW, VH))
+        pygame.draw.polygon(cone, (9, 8, 6), [(lx - 3, 12), (lx + 3, 12), (lx + 70, GROUND + 4), (lx - 70, GROUND + 4)])
+        s.blit(cone, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+    pool = pygame.Surface((VW, VH))
+    pygame.draw.ellipse(pool, (16, 15, 12), (20, RING_BACK + 4, VW - 40, 34))
+    s.blit(pool, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+    pool.fill((0, 0, 0))
+    pygame.draw.ellipse(pool, (14, 13, 10), (60, RING_BACK + 10, VW - 120, 22))
+    s.blit(pool, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+    return s
+
+
+def make_person(rnd, size, light):
+    """One fan, arms down and arms up (13 x 22, head near the top)."""
+    imgs = []
+    head_r = 2 if size == 0 else 3
+    skin = arena_tint(rnd.choice(SKINS), light)
+    shirt = arena_tint(rnd.choice(SHIRTS), light)
+    hair = arena_tint(rnd.choice(HAIRS), light)
+    cap = rnd.random() < 0.18
+    capc = arena_tint(rnd.choice(SHIRTS), light)
+    bw = rnd.randint(7, 9) if size else rnd.randint(6, 7)
+    ol = arena_tint((10, 8, 18), light)
+    for arms_up in (False, True):
+        s = pygame.Surface((13, 22), pygame.SRCALPHA)
+        cx, hy = 6, 7
+        s.fill(ol, (cx - bw // 2 - 1, hy + head_r, bw + 2, 22))
+        s.fill(shirt, (cx - bw // 2, hy + head_r + 1, bw, 22))
+        s.fill(lighten(shirt, 0.15), (cx - bw // 2, hy + head_r + 1, bw, 1))
+        if arms_up:
+            for ax in (cx - bw // 2, cx + bw // 2 - 1):
+                s.fill(ol, (ax - 1, 0, 3, hy + head_r + 2))
+                s.fill(shirt, (ax, 2, 1, hy + head_r))
+                s.fill(skin, (ax, 0, 1, 2))
+        pygame.draw.circle(s, ol, (cx, hy), head_r + 1)
+        pygame.draw.circle(s, skin, (cx, hy), head_r)
+        if cap:
+            s.fill(capc, (cx - head_r, hy - head_r, head_r * 2 + 1, 2))
+        else:
+            s.fill(hair, (cx - head_r + 1, hy - head_r, head_r * 2 - 1, 1 if size == 0 else 2))
+        imgs.append(s)
+    return imgs
+
+
+class Crowd:
+    """Rows of fans behind the ring. They bob, stand, throw their arms up and pop camera flashes
+    depending on how excited they are (hype 0..1)."""
+
+    def __init__(self):
+        rnd = random.Random(5)
+        self.people = []
+        for row, (y, light, sp, size) in enumerate(CROWD_ROWS):
+            x = rnd.uniform(-6, 0) - (row % 2) * sp / 2
+            while x < VW + 6:
+                down, up = make_person(rnd, size, light)
+                sign = None
+                if row >= 2 and rnd.random() < 0.07:
+                    sign = pygame.Surface((14, 8))
+                    sign.fill(arena_tint((20, 18, 30), light))
+                    sign.fill(arena_tint((240, 240, 236), light), (1, 1, 12, 6))
+                    sign.fill(arena_tint(rnd.choice(SHIRTS), light), (3, 3, rnd.randint(5, 8), 2))
+                self.people.append([x, y - 7, down, up, rnd.uniform(0, 6.28), rnd.uniform(0.4, 1.0), sign,
+                                    rnd.uniform(0.8, 1.25)])
+                x += sp + rnd.uniform(-1.5, 1.5)
+        self.flashes = []
+
+    def update(self, dt, hype):
+        rate = 0.5 + 22 * hype * hype
+        n = rate * dt
+        for _ in range(int(n) + (1 if random.random() < n % 1 else 0)):
+            pr = random.choice(self.people)
+            self.flashes.append([pr[0] + 6 + random.randint(-2, 2), pr[1] + random.randint(2, 8), 0.0])
+        for f in self.flashes:
+            f[2] += dt
+        self.flashes = [f for f in self.flashes if f[2] < 0.08]
+
+    def draw(self, c, clock, hype):
+        speed = 5 + 7 * hype
+        stand = 2 if hype > 0.75 else (1 if hype > 0.5 else 0)
+        for x, y, down, up, ph, ex, sign, sp in self.people:
+            wave = math.sin(clock * speed * sp + ph)
+            bob = int(round(wave * (0.35 + 2.4 * hype * ex)))
+            arms = hype * ex > 0.42 and math.sin(clock * speed * 0.5 * sp + ph) > -0.2
+            yy = y - stand - max(0, bob)
+            c.blit(up if arms else down, (int(x), yy))
+            if sign is not None:
+                c.blit(sign, (int(x) - 1, yy - 7 - (2 if arms else 0)))
+        for x, y, t in self.flashes:
+            k = 1 - t / 0.08
+            col = (255, 255, int(220 + 35 * k))
+            c.fill(col, (x - 1, y, 3, 1))
+            c.fill(col, (x, y - 1, 1, 3))
+            if k > 0.5:
+                c.fill((255, 255, 255), (x - 2, y, 5, 1))
+                c.fill((255, 255, 255), (x, y - 2, 1, 5))
+
+
+# ============================================================ the referee
+REF_POSES = ("idle", "walk", "up", "down", "wave_a", "wave_b", "point")
+
+
+def make_referee():
+    """Pixel referee (white shirt, bow tie, black slacks), one surface per pose, facing right.
+    Surface is 44 x 66; the feet are on the bottom row, x = 22 is his centre."""
+    ol, shirt, shirt_s = (24, 14, 34), (236, 238, 248), (176, 182, 206)
+    pants, pants_l, skin, skin_s = (40, 40, 54), (74, 74, 96), (232, 176, 128), (190, 130, 92)
+    hair = (150, 150, 162)
+    arms = {   # (shoulder->elbow->hand) for the front arm, then the back arm
+        "idle": (((25, 26), (26, 34), (26, 41)), ((17, 26), (16, 34), (16, 41))),
+        "walk": (((25, 26), (28, 33), (29, 40)), ((17, 26), (14, 33), (13, 40))),
+        "up": (((25, 26), (30, 19), (31, 10)), ((17, 26), (16, 34), (16, 41))),
+        "down": (((25, 26), (32, 30), (38, 35)), ((17, 26), (16, 34), (16, 41))),
+        "wave_a": (((25, 26), (31, 19), (25, 12)), ((17, 26), (12, 19), (18, 12))),
+        "wave_b": (((25, 26), (33, 22), (40, 17)), ((17, 26), (9, 22), (2, 17))),
+        "point": (((25, 26), (33, 25), (41, 24)), ((17, 26), (16, 34), (16, 41))),
+    }
+    out = {}
+    for pose in REF_POSES:
+        s = pygame.Surface((44, 66), pygame.SRCALPHA)
+        front, back = arms[pose]
+
+        def arm(pts, sleeve, hand):
+            pygame.draw.lines(s, sleeve, False, pts, 3)
+            hx, hy = pts[-1]
+            s.fill(hand, (hx - 1, hy - 1, 3, 3))
+        arm(back, shirt_s, skin_s)
+        stride = 3 if pose == "walk" else 0
+        s.fill(pants, (17 - stride, 42, 4, 20))          # legs
+        s.fill(pants, (22 + stride, 42, 4, 20))
+        s.fill(pants_l, (22 + stride, 42, 1, 20))
+        s.fill((20, 20, 26), (15 - stride, 62, 7, 4))      # shoes
+        s.fill((20, 20, 26), (22 + stride, 62, 8, 4))
+        s.fill((90, 90, 110), (23 + stride, 62, 5, 1))
+        s.fill(shirt, (16, 23, 11, 19))                    # torso
+        s.fill(shirt_s, (16, 23, 2, 19))
+        s.fill((30, 30, 40), (16, 40, 11, 2))              # belt
+        s.fill(skin, (20, 20, 4, 4))                       # neck
+        s.fill((20, 20, 26), (19, 23, 6, 2))               # bow tie
+        s.fill((20, 20, 26), (21, 22, 2, 4))
+        pygame.draw.ellipse(s, skin, (16, 7, 11, 14))      # head
+        s.fill(skin_s, (16, 14, 2, 4))
+        s.fill(hair, (16, 6, 10, 4))
+        s.fill(hair, (16, 6, 3, 8))
+        s.fill((30, 20, 30), (24, 12, 1, 2))               # eye
+        s.fill(skin_s, (25, 17, 2, 1))                     # mouth
+        arm(front, shirt, skin)
+        if pose == "up":                                   # fingers up for the count
+            s.fill(skin, (30, 7, 1, 3))
+            s.fill(skin, (32, 7, 1, 3))
+        sil = pygame.mask.from_surface(s).to_surface(setcolor=ol, unsetcolor=(0, 0, 0, 0))
+        o = pygame.Surface((44, 66), pygame.SRCALPHA)
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            o.blit(sil, (dx, dy))
+        o.blit(s, (0, 0))
+        out[pose] = (o, pygame.transform.flip(o, True, False))
+    return out
+
+
+class Referee:
+    SPEED = 170.0
+
+    def __init__(self, game):
+        self.game = game
+        self.imgs = make_referee()
+        self.hide()
+
+    def hide(self):
+        self.on = False
+        self.x = self.tx = -60.0
+        self.facing = 1
+        self.pose, self.pose_t = "idle", 0.0
+        self.leaving = False
+
+    def enter(self, from_x, to_x, facing):
+        if not self.on:
+            self.x = from_x
+        self.on, self.leaving = True, False
+        self.tx, self.facing = to_x, facing
+        self.pose, self.pose_t = "walk", 0.0
+
+    def leave(self):
+        if self.on:
+            self.leaving = True
+            self.tx = VW + 60 if self.x > VW / 2 else -60
+            self.facing = 1 if self.tx > self.x else -1
+
+    def set_pose(self, pose, hold=0.0):
+        self.pose, self.pose_t = pose, hold
+
+    def arrived(self):
+        return self.on and abs(self.x - self.tx) < 1
+
+    def update(self, dt):
+        if not self.on:
+            return
+        self.pose_t = max(0.0, self.pose_t - dt)
+        d = self.tx - self.x
+        if abs(d) > 0.5:
+            self.x += clamp(d, -self.SPEED * dt, self.SPEED * dt)
+        elif self.leaving:
+            self.hide()
+
+    def draw(self, c, clock):
+        if not self.on:
+            return
+        moving = abs(self.tx - self.x) > 0.5
+        pose = self.pose
+        face = self.facing
+        if moving and self.pose_t <= 0:
+            pose = "walk" if int(clock * 8) % 2 else "idle"
+            face = 1 if self.tx > self.x else -1
+        elif pose in ("wave_a", "wave_b"):
+            pose = "wave_a" if int(clock * 7) % 2 else "wave_b"
+        img = self.imgs[pose][0 if face > 0 else 1]
+        c.blit(self.game.shadow, (int(self.x) - 24, GROUND - 5))
+        c.blit(img, (int(self.x) - 22, GROUND - 65))
+
+
 class Bag:
     W0 = 3.8          # pendulum frequency (rad/s) - higher = snappier swing
     DAMP = 0.45       # air resistance
@@ -667,9 +1230,11 @@ class Fighter:
         self.configure()
         self.reset(72)
 
-    def configure(self, max_hp=MAX_HP, power=1.0, speed=1.0, walk=1.0):
-        """Per-boxer stats: health, punch damage multiplier, animation speed, footspeed."""
+    def configure(self, max_hp=MAX_HP, power=1.0, speed=1.0, walk=1.0, chin=1.0, heart=1.0):
+        """Per-boxer stats: health, punch damage multiplier, animation speed, footspeed,
+        chin (how much his head can take) and heart (how hard he fights to beat the count)."""
         self.max_hp, self.power, self.speed, self.walk = float(max_hp), power, speed, walk
+        self.chin, self.heart = chin, heart
 
     def reset(self, x):
         self.x = float(x)
@@ -697,12 +1262,32 @@ class Fighter:
         self.hitstun = 0.0
         self.stun_t, self.stun_el = 0.0, 0.0
         self.ko = self.won = False
+        self.ko_style = "kneel"        # how a finished fighter is shown: kneel / stand (ref stoppage)
         self.end_t = 0.0
         self.ghosts = []
+        # --- knockdown system
+        self.daze, self.daze_t = 0.0, 99.0   # hidden concussion meter (head shots)
+        self.body_dmg = 0.0                  # hidden body damage (for liver shots)
+        self.hurt = False                    # wobbling: gloves down, slow, wide open
+        self.downs = 0                       # times knocked down this fight
+        self.kds = 0                         # knockdowns scored on the other guy
+        self.dealt = 0.0                     # damage landed (judges' scorecards)
+        self.unanswered = 0                  # clean shots taken in a row without landing one back
+        self.down = False                    # on the canvas, being counted
+        self.down_t = 0.0
+        self.rising_t = -1.0                 # >= 0 while getting back up
+        self.out_cold = False                # flat on his back - fight over
+        self.fall_t = 0.0
+        self.liver_t = 0.0                   # >0: about to fold from a liver shot
 
     # ------------------------------------------------------------ state queries
     def busy(self):
-        return self.ko or self.won or self.stun_t > 0 or self.hitstun > 0
+        return (self.ko or self.won or self.stun_t > 0 or self.hitstun > 0 or self.down or self.out_cold
+                or self.liver_t > 0)
+
+    def spd(self):
+        """Animation speed right now (a hurt fighter's punches come slower)."""
+        return self.speed * (0.82 if self.hurt else 1.0)
 
     def slipping(self):
         return self.action == "slip" and 1 <= self.idx <= 4
@@ -789,6 +1374,17 @@ class Fighter:
     def current_frame(self):
         if self.pose_override is not None:
             return self.pose_override
+        if self.out_cold:
+            return F_HIT_HEAD[1]                 # drawn rotated, flat on his back
+        if self.down:
+            if self.rising_t >= 0:
+                r = self.rising_t
+                return F_KO[2] if r < 0.2 else (F_KO[1] if r < 0.42 else F_KO[0])
+            return F_KO[0] if self.down_t < 0.12 else (F_KO[1] if self.down_t < 0.42 else F_KO[2])
+        if self.liver_t > 0:
+            return F_HIT_BODY[1]
+        if self.ko and self.ko_style == "stand":
+            return F_STAGGER[int(self.end_t * 5) % len(F_STAGGER)]
         if self.ko:
             return F_KO[0] if self.end_t < 0.12 else (F_KO[1] if self.end_t < 0.45 else F_KO[2])
         if self.won and self.end_t >= 0:
@@ -806,6 +1402,8 @@ class Fighter:
             return frames[0] if self.block_t < 0.05 else frames[1]
         if self.moving:
             return WALK_BASE + self.walk_i
+        if self.hurt:                            # gloves down, wobbling
+            return F_STAGGER[int(self.game.clock * 4.5 + self.x) % len(F_STAGGER)]
         return IDLE_SEQ[self.idle_i]
 
     # ------------------------------------------------------------ update
@@ -819,7 +1417,7 @@ class Fighter:
 
         # healing: after REGEN_DELAY seconds untouched, heal up to the cap
         self.since_damage += dt
-        self.healing = (not self.ko and self.hp > 0 and self.since_damage >= REGEN_DELAY
+        self.healing = (not self.ko and not self.down and self.hp > 0 and self.since_damage >= REGEN_DELAY
                         and self.hp < self.regen_cap)
         if self.healing:
             self.hp = min(float(self.regen_cap), self.hp + REGEN_RATE * dt)
@@ -827,6 +1425,25 @@ class Fighter:
             self.hp_lag = max(self.hp, self.hp_lag - 30 * dt)
         else:
             self.hp_lag = self.hp
+
+        # concussion / body damage wear off slowly
+        self.daze_t += dt
+        if self.daze_t >= DAZE_DELAY:
+            self.daze = max(0.0, self.daze - DAZE_DECAY * dt)
+        if self.hurt and self.daze < HURT_EXIT:
+            self.hurt = False
+            self.unanswered = 0
+        self.body_dmg = max(0.0, self.body_dmg - BODY_DECAY * dt)
+        if self.down or self.out_cold:
+            self.down_t += dt
+            self.fall_t += dt
+            if self.rising_t >= 0:
+                self.rising_t += dt
+            self.moving = 0
+            return
+        if self.liver_t > 0:                     # doubled over, about to go down (Game counts it down)
+            self.moving = 0
+            return
 
         # guard meter
         self.guard_t += dt
@@ -883,7 +1500,7 @@ class Fighter:
 
     def update_action(self, dt):
         spec = ACTIONS[self.action]
-        self.t += dt * 1000.0 * self.speed
+        self.t += dt * 1000.0 * self.spd()
         while self.action and self.t >= spec["ms"][self.idx]:
             self.t -= spec["ms"][self.idx]
             self.idx += 1
@@ -909,7 +1526,7 @@ class Fighter:
         moved, fwd = False, True
         if move:
             fwd = move == self.facing
-            speed = (WALK_FWD if fwd else WALK_BACK) * self.walk
+            speed = (WALK_FWD if fwd else WALK_BACK) * self.walk * (0.6 if self.hurt else 1.0)
             if move > 0:      # never pushed backwards by a limit, only stopped by it
                 nx = max(self.x, min(self.x + speed * dt, max_x))
             else:
@@ -932,8 +1549,43 @@ class Fighter:
                 self.idle_i = (self.idle_i + 1) % len(IDLE_SEQ)
 
     # ------------------------------------------------------------ drawing
+    def fall_angle(self):
+        """Out cold: tips over backwards like a felled tree, with a little bounce."""
+        t = self.fall_t
+        if t < 0.42:
+            k = t / 0.42
+            return 90 * k * k
+        if t < 0.62:
+            return 90 - 9 * math.sin((t - 0.42) / 0.2 * math.pi)
+        return 90
+
+    def lying(self):
+        """(image, x, y) of the out-cold fighter, kept on screen and resting on the canvas."""
+        ang = int(round(self.fall_angle() / 6)) * 6
+        r = self.game.rotated(self.frames, F_HIT_HEAD[1], ang * self.facing, self.facing)
+        x = int(self.x) - r["px"]
+        y = min(GROUND - r["py"], GROUND + 1 - r["bottom"])    # pivot on the floor, never sink into it
+        x = int(clamp(x, 2 - r["left"], VW - 2 - r["right"]))
+        return r["img"], x, y
+
+    def head_pos(self):
+        """Where his head is right now (for dizzy stars, speech bubbles, the rain cloud)."""
+        if self.out_cold:
+            img, x, y = self.lying()
+            w = img.get_width()
+            hx = x + (10 if self.facing > 0 else w - 10)
+            return hx, GROUND - 10
+        top, cx = self.game.frame_top(self.frames, self.current_frame())
+        return self.sprite_x() + cx, GROUND - SPRITE_FEET + top + 5
+
     def draw(self, c):
         sy = GROUND - SPRITE_FEET
+        if self.out_cold:
+            img, x, y = self.lying()
+            sh = pygame.transform.scale(self.game.shadow, (img.get_width(), 8))
+            c.blit(sh, (x, GROUND - 5))
+            c.blit(img, (x, y))
+            return
         c.blit(self.game.shadow, (int(self.x) - 24 + 3 * self.facing, GROUND - 5))
         for g in self.ghosts:
             g["img"].set_alpha(int(120 * (1 - g["t"] / g["life"])))
@@ -974,6 +1626,9 @@ class AI:
         self.clock = 0.0
 
     def choose_attack(self, L, foe):
+        if foe.hurt:                              # smells blood: power shots to finish him
+            return random.choice([["jab", "cross", "cross"], ["cross", "body_cross", "cross"], ["jab", "cross"],
+                                  ["body_jab", "cross", "cross"], ["cross", "cross"]])
         if foe.block and foe.block_t > 0.3 and random.random() < L["flurry"]:
             seq = [random.choice(["jab", "jab", "body_jab"]) for _ in range(random.randint(3, 5))]
             seq.append("body_cross" if foe.block == "high" else "cross")
@@ -1011,7 +1666,7 @@ class AI:
             self.foe_body = (self.foe_body + [target == "body"])[-4:]
             self.foe_times = [t for t in self.foe_times if self.clock - t < 1.2] + [self.clock]
             react = (L["react"] + (0.15 if me.hp < 0.35 * me.max_hp else 0.0)
-                     + (0.2 if len(self.foe_times) >= 3 else 0.0))
+                     + (0.2 if len(self.foe_times) >= 3 else 0.0) + (0.18 if me.hurt else 0.0))
             if dist <= R[foe.action] + 6 and random.random() < react:
                 if target == "head" and random.random() < L["slip"]:
                     kind = "slip"
@@ -1063,9 +1718,12 @@ class AI:
                 self.plan = ["cross"] if random.random() < 0.6 else ["jab", "cross"]
         if foe.stun_t > 0 and not self.plan and dist <= R["cross"]:
             self.plan = random.choice([["cross", "body_cross"], ["jab", "cross", "jab"], ["body_cross", "cross"]])
+        if foe.hurt and self.atk_t > 0.5 and dist <= R["cross"] + 4:
+            self.atk_t = random.uniform(0.2, 0.5)    # go for the finish
         self.atk_t -= dt
         if self.atk_t <= 0 and not self.plan and not me.action:
-            self.atk_t = random.uniform(*L["atk"]) * (1.4 if me.hp < 0.3 * me.max_hp else 1.0)
+            self.atk_t = (random.uniform(*L["atk"]) * (1.4 if me.hp < 0.3 * me.max_hp else 1.0)
+                          * (1.8 if me.hurt else 1.0) * (0.6 if foe.hurt else 1.0))
             if dist <= R["jab"] + 2:
                 self.plan = self.choose_attack(L, foe)
             else:
@@ -1079,12 +1737,14 @@ class AI:
             return
 
         # --- sometimes just sit behind the guard (low guard if you keep going to the body)
-        if dist <= R["cross"] + 6 and random.random() < L["guard_up"] * dt * 2:
+        if dist <= R["cross"] + 6 and random.random() < L["guard_up"] * dt * (8 if me.hurt else 2):
             self.guard_t = random.uniform(0.5, 1.1)
             self.guard_level = "low" if sum(self.foe_body) >= 2 else "high"
 
         # --- footwork
-        desired = R["jab"] - 6
+        desired = R["jab"] - 6 if not foe.hurt else R["cross"] - 10
+        if me.hurt and self.retreat_t <= 0 and random.random() < 1.5 * dt:
+            self.retreat_t = random.uniform(0.5, 1.0)    # hurt: get on the bike and survive
         if self.retreat_t > 0:
             self.retreat_t -= dt
             self.move = 1
@@ -1140,6 +1800,9 @@ class Bubble:
         top, cx = g.frame_top(who.frames, who.current_frame())
         head_x = who.sprite_x() + cx
         bottom = GROUND - SPRITE_FEET + top - (9 if who.belt else 0) - 7
+        if who.out_cold:
+            head_x, hy = who.head_pos()
+            bottom = hy - 12
         x = int(clamp(head_x - w // 2, 4, VW - 4 - w))
         y = int(max(bottom - h, self.min_top))
         bottom = y + h
@@ -1171,6 +1834,7 @@ class Game:
         self.belt = make_belt()
         self.belt_small = pygame.transform.scale(self.belt, (18, 7))
         self._tops = {}
+        self._rot = {}
         self.fist = {i: fist_point(frames[i]) for i in (6, 14, 15, 29, 34)}
         self.ranges = {}
         for n in PUNCHES:
@@ -1181,6 +1845,11 @@ class Game:
 
         self.bg = make_background()
         self.bag = Bag()
+        self.crowd = Crowd()
+        self.lights = make_arena_lights()
+        self.sweep_glow = pygame.Surface((56, 86))
+        pygame.draw.ellipse(self.sweep_glow, (34, 31, 24), (2, 0, 52, 84))
+        pygame.draw.ellipse(self.sweep_glow, (64, 60, 48), (14, 16, 28, 56))
         self.canvas = pygame.Surface((VW, VH))
         self.font_s = pygame.font.Font(None, 14)
         self.font_m = pygame.font.Font(None, 18)
@@ -1197,9 +1866,29 @@ class Game:
         self.button = pygame.Rect(SIGN_POS[0] + sign_w + 6, SIGN_POS[1] - 2, 30, 13)
         cw = self.font_s.size("CAMPAIGN")[0] + 8
         self.campaign_button = pygame.Rect(self.button.right + 3, self.button.y, cw, 13)
+        self.arena_bg = make_arena_background(self.button.x)
         self.hover = None
+        self.ref = Referee(self)
+        self.hype = 0.0
+        self.slowmo = 0.0
+        self.dn = None
+        self.mash, self.mash_need = 0.0, MASH_NEED
+        self.beat_t = 0.0
+        self.thud_pending = None
+        self.ko_hold = 2.2
+        self.method = None
+        self.crowd_ch = None
+        if self.sounds:
+            try:
+                pygame.mixer.set_num_channels(24)
+                pygame.mixer.set_reserved(1)
+                self.crowd_ch = pygame.mixer.Channel(0)
+            except pygame.error:
+                self.crowd_ch = None
 
         self.player = Fighter(self, frames, 1)
+        self.player.configure(chin=PLAYER_CHIN)
+        self.player.reset(72)
         self.cpu = Fighter(self, self.spar_frames, -1)
         self.ai = AI(self, self.cpu, self.player)
         self.clock = 0.0
@@ -1222,11 +1911,53 @@ class Game:
             self._tops[key] = (top, (min(xs) + max(xs)) // 2)
         return self._tops[key]
 
+    def rotated(self, frames, i, angle, facing):
+        """Frame i rotated by angle (degrees, + = counter-clockwise) about the feet, cached.
+        px/py: where the feet pivot ended up; bottom/left/right: opaque bounds."""
+        key = (id(frames), i, angle)
+        if key not in self._rot:
+            f = frames[i]
+            pivot = pygame.math.Vector2(HIP_X if facing > 0 else FW - 1 - HIP_X, SPRITE_FEET)
+            img = pygame.transform.rotate(f, angle)
+            centre = pygame.math.Vector2(FW / 2, FH / 2)
+            off = (pivot - centre).rotate(-angle)
+            new_c = pygame.math.Vector2(img.get_width() / 2, img.get_height() / 2)
+            p = new_c + off
+            rects = pygame.mask.from_surface(img).get_bounding_rects()
+            u = rects[0].unionall(rects[1:])
+            self._rot[key] = dict(img=img, px=int(round(p.x)), py=int(round(p.y)), bottom=u.bottom,
+                                  left=u.left, right=u.right)
+        return self._rot[key]
+
     # ------------------------------------------------------------ modes
     def clear_fx(self):
         self.texts, self.parts, self.stars = [], [], []
         self.shake, self.shake_t, self.hitstop, self.flash_t = 0, 0.0, 0.0, 0.0
         self.combo, self.combo_t = 0, 0.0
+        self.slowmo = 0.0
+        self.dn = None
+        self.mash = 0.0
+        self.thud_pending = None
+        self.method = None
+        if hasattr(self, "ref"):
+            self.ref.hide()
+            self.ref.SPEED = Referee.SPEED
+
+    @property
+    def arena(self):
+        return self.mode == "campaign"
+
+    def hype_base(self):
+        if self.mode != "campaign":
+            return 0.0
+        champ = self.opp.get("champ")
+        if self.phase in ("walkin", "talk", "reply"):
+            return 0.35 if champ else 0.22
+        if self.phase == "champion":
+            return 0.95
+        if self.phase == "defeat":
+            return 0.12
+        return 0.3 if champ else 0.2
 
     def reset_bag(self):
         self.mode = "bag"
@@ -1262,7 +1993,7 @@ class Game:
         o = self.opp = CAMPAIGN[self.stage]
         p, c = self.player, self.cpu
         c.frames = self.campaign_frames[self.stage]
-        c.configure(o["hp"], o["power"], o["speed"], o["walk"])
+        c.configure(o["hp"], o["power"], o["speed"], o["walk"], o.get("chin", 1.0), o.get("heart", 1.0))
         p.reset(96)
         c.reset(372)                       # off screen - walks in
         self.ai.set_level(o["level"], o.get("ai"), o.get("style"))
@@ -1289,7 +2020,7 @@ class Game:
         p, c, o = self.player, self.cpu, self.opp
         if self.bubble:
             self.bubble.update(dt)
-        if self.phase in ("intro", "fight", "ko"):
+        if self.phase in ("intro", "fight", "ko", "down"):
             self.update_spar(dt, move, want)
             if self.phase == "result":
                 self.after_fight()
@@ -1376,11 +2107,13 @@ class Game:
         p.update(dt, 0, MIN_X, c.x - MIN_SEP)
         if ph != "walkin":
             c.update(dt, 0, p.x + MIN_SEP, STAGE_MAX_X)
+        self.ref.update(dt)
 
     def after_fight(self):
         p, c = self.player, self.cpu
         self.phase_t, self.step = 0.0, 0
         self.bubble = None
+        self.ref.leave()
         if self.result == "YOU WIN!":
             if self.stage == len(CAMPAIGN) - 1:
                 self.phase = "champion"
@@ -1390,7 +2123,7 @@ class Game:
                 self.snd("crowd")
             else:
                 self.phase = "victory"
-                self.bubble = Bubble(self, c, self.opp["lose"], min_top=80)
+                self.bubble = Bubble(self, c, self.opp["lose"], min_top=88)
         else:
             self.phase = "defeat"
             if not c.won:
@@ -1461,9 +2194,29 @@ class Game:
 
     # ------------------------------------------------------------ input
     def press(self, name):
+        if self.phase == "down" and self.mode != "bag" and self.dn and self.dn["who"] is self.player:
+            if self.player.down and self.player.rising_t < 0:
+                self.mash += 1                    # mash to beat the count
+                self.snd("blip")
+            return
         if self.mode != "bag" and self.phase != "fight":
             return
         self.player.press(name)
+
+    def update_audio(self, dt):
+        base = self.hype_base()
+        self.hype += (base - self.hype) * min(1.0, dt * (0.35 if self.hype > base else 1.5))
+        if self.mode == "campaign":
+            self.crowd.update(dt, self.hype)
+        ch, loop = self.crowd_ch, self.sounds.get("crowd_loop")
+        if not ch or not loop:
+            return
+        if self.mode == "campaign" and not self.muted:
+            if not ch.get_busy():
+                ch.play(loop, loops=-1, fade_ms=600)
+            ch.set_volume(0.18 + 0.75 * self.hype)
+        elif ch.get_busy():
+            ch.fadeout(400)
 
     def snd(self, name):
         s = self.sounds.get(name)
@@ -1472,6 +2225,8 @@ class Game:
 
     def toggle_mute(self):
         self.muted = not self.muted
+        if self.muted:
+            pygame.mixer.stop()
 
     def say(self, s, x, y, color, font=None, vy=-22, life=0.8):
         self.texts.append(dict(s=s, x=x, y=y, vy=vy, t=0.0, life=life, color=color, font=font or self.font_m))
@@ -1484,7 +2239,11 @@ class Game:
 
     # ------------------------------------------------------------ update
     def update(self, dt, left=False, right=False, down=False, block=False):
+        if self.slowmo > 0:                       # slow motion on the big moments
+            self.slowmo -= dt
+            dt *= 0.35
         self.clock += dt
+        self.update_audio(dt)
         self.update_fx(dt)
         if self.hitstop > 0:
             self.hitstop -= dt
@@ -1517,45 +2276,79 @@ class Game:
             self.resolve(p, c)
             self.resolve(c, p)
             self.separate()
-            for f in (p, c):
+            for f, o in ((p, c), (c, p)):
+                if f.liver_t > 0 and self.phase == "fight":
+                    f.liver_t -= dt
+                    if f.liver_t <= 0:
+                        self.knockdown(f, o, "liver", 3.0)
                 if f.healing and random.random() < dt * 3:
                     self.say("+", f.x + random.uniform(-8, 8), GROUND - 74, (120, 240, 140), self.font_m,
                              vy=-16, life=0.6)
+            if p.hurt and self.phase == "fight":     # your heart pounding while you're hurt
+                self.beat_t -= dt
+                if self.beat_t <= 0:
+                    self.beat_t = 0.85
+                    self.snd("heartbeat")
             if self.round_time <= 0 and self.phase == "fight":
                 self.round_time = 0.0
                 self.end_fight(by_time=True)
+        elif self.phase == "down":
+            self.update_down(dt)
         else:
             p.want_block = c.want_block = None
             p.update(dt, 0, MIN_X, c.x - MIN_SEP)
             c.update(dt, 0, p.x + MIN_SEP, STAGE_MAX_X)
             if self.phase == "intro" and self.phase_t > 1.8:
                 self.phase, self.phase_t = "fight", 0.0
-            elif self.phase == "ko" and self.phase_t > 1.6:
-                self.phase, self.phase_t = "result", 0.0
+            elif self.phase == "ko":
+                t = self.thud_pending
+                if t is not None and t.fall_t >= 0.42:
+                    self.thud_pending = None
+                    self.snd("canvas")
+                    self.dust(t.head_pos()[0])
+                if self.phase_t > 0.5 and self.ref.arrived() and self.ref.pose not in ("wave_a", "wave_b"):
+                    self.ref.set_pose("wave_a", 99)
+                if self.phase_t > self.ko_hold:
+                    self.phase, self.phase_t = "result", 0.0
+        self.ref.update(dt)
 
-    def end_fight(self, by_time=False, loser=None):
+    def end_fight(self, by_time=False, loser=None, method="KO"):
         p, c = self.player, self.cpu
         if by_time:
-            pr, cr = p.hp / p.max_hp, c.hp / c.max_hp          # decision on % of health left
-            if abs(pr - cr) < 0.005:
+            # judges' scorecards: punches landed, and a knockdown is worth a lot
+            sp, sc = p.dealt + 30 * p.kds, c.dealt + 30 * c.kds
+            if abs(sp - sc) < 3:
                 self.result = "DRAW"
             else:
-                self.result = "YOU WIN!" if pr > cr else "YOU LOSE"
-                winner = p if pr > cr else c
+                self.result = "YOU WIN!" if sp > sc else "YOU LOSE"
+                winner = p if sp > sc else c
                 winner.won, winner.end_t = True, 0.0
+                loser = c if winner is p else p
+            self.method = "DECISION" if self.result != "DRAW" else "DRAW"
             self.end_reason = "time"
-            if self.mode == "campaign":
-                self.phase, self.phase_t = "ko", 0.0
-            else:
-                self.phase, self.phase_t = "result", 0.0
-                self.say("TIME!", VW // 2 - 22, 70, (255, 232, 130), self.font_xl, vy=0, life=1.5)
+            self.ko_hold = 1.6
         else:
             self.end_reason = "ko"
+            self.method = method
             winner = c if loser is p else p
             winner.won, winner.end_t = True, -0.9
+            loser.ko = True
+            loser.ko_style = "stand" if method == "STOPPAGE" else "kneel"
+            if loser.down:                          # stays kneeling where he was counted out
+                loser.down, loser.end_t = False, 0.6
             self.result = "YOU WIN!" if loser is c else "YOU LOSE"
-            self.phase, self.phase_t = "ko", 0.0
-        self.snd("bell")
+            self.ko_hold = 2.8 if method == "OUT COLD" else 2.2
+            if loser is not None:
+                self.call_ref(loser, wave=True)
+            self.excite(1.0)
+            self.snd("roar" if self.arena else "crowd")
+        self.phase, self.phase_t = "ko", 0.0
+        self.snd("bell3")
+
+    METHOD_TEXT = {"KO": "K.O.!", "OUT COLD": "OUT COLD!", "TKO": "T.K.O.!", "STOPPAGE": "T.K.O.!",
+                   "DECISION": "DECISION", "DRAW": "DRAW"}
+    METHOD_SUB = {"KO": "COUNTED OUT", "OUT COLD": "KNOCKED OUT COLD", "TKO": "THREE KNOCKDOWNS",
+                  "STOPPAGE": "THE REFEREE STOPS IT", "DECISION": "THE JUDGES' DECISION", "DRAW": "THE JUDGES CALL IT A DRAW"}
 
     def separate(self):
         p, c = self.player, self.cpu
@@ -1569,9 +2362,12 @@ class Game:
             p.x -= mp
             c.x += mc
 
+    def excite(self, amount):
+        self.hype = min(1.0, self.hype + amount)
+
     # ------------------------------------------------------------ sparring hits
     def resolve(self, att, d):
-        if att.action not in PUNCHES or att.hit_done or d.ko:
+        if att.action not in PUNCHES or att.hit_done or d.ko or d.down or d.out_cold:
             return
         spec = ACTIONS[att.action]
         frame = spec["frames"][att.idx]
@@ -1580,7 +2376,8 @@ class Game:
         target = spec["target"]
         reach = self.fist[frame][0] - HIP_X + att.lunge()
         dist = (d.x - att.x) * att.facing
-        if dist <= 0 or reach + HURT[target] + 3 < dist:
+        full = reach + HURT[target] + 3
+        if dist <= 0 or full < dist:
             return                                    # not there yet - "miss" if it never gets there
         hx = d.x + d.facing * HURT[target]
         hy = GROUND - SPRITE_FEET + TARGET_Y[target]
@@ -1594,7 +2391,9 @@ class Game:
         if blocked:
             self.blocked(att, d, spec, hx, hy)
         else:
-            self.clean_hit(att, d, spec, target, hx, hy)
+            # how far into the punch it landed: 1 = at the end of his reach (flush), 0 = smothered
+            ext = clamp((dist - MIN_SEP) / max(1.0, self.ranges[att.action] - MIN_SEP), 0.0, 1.0)
+            self.clean_hit(att, d, spec, target, hx, hy, ext)
 
     def blocked(self, att, d, spec, hx, hy):
         if d.parry_ready and d.block_t <= PARRY_WINDOW:
@@ -1605,7 +2404,9 @@ class Game:
             self.say("PARRY!", hx - 20, hy - 26, (130, 240, 255), self.font_l, vy=-20, life=0.9)
             self.hitstop = 0.09
             self.snd("parry")
+            self.excite(0.12)
             return
+        d.unanswered = max(0, d.unanswered - 1)    # covering up shows the referee he's still in it
         d.guard -= spec["guard"] * (1 + FLURRY_RAMP * d.block_chain)
         d.block_chain += 1
         d.block_chain_t = FLURRY_WINDOW
@@ -1623,11 +2424,39 @@ class Game:
             self.say("GUARD BREAK!", hx - 34, hy - 30, (255, 150, 90), self.font_l, vy=-16, life=1.1)
             self.shake, self.shake_t = 3, 0.18
             self.snd("guard_break")
+            self.excite(0.25)
 
-    def clean_hit(self, att, d, spec, target, hx, hy):
+    def impact(self, att, d, name, ext, counter_hit, walking_in, slip_counter, crit, stunned):
+        """How HARD a clean punch landed, divided by the victim's chin. Compared with KD_IMPACT /
+        KO_IMPACT to decide flash knockdowns and one-punch knockouts. Returns (impact, notes)."""
+        k = POWER[name] * att.power ** 0.7
+        k *= 0.78 + 0.37 * ext                    # flush at the end of the punch vs smothered
+        if counter_hit:
+            k *= 1.45                             # caught him mid-punch: he never saw it
+        if walking_in:
+            k *= 1.15                             # stepped forward into it
+        if stunned:
+            k *= 1.25                             # parried / guard broken: nothing to absorb it
+        elif slip_counter:
+            k *= 1.35                             # slipped and came back with it
+        if crit and not stunned:
+            k *= 1.35                             # right on the button (a stunned man is always 'crit')
+        if d.hurt:
+            k *= 1.25                             # already wobbling
+        k *= 1 + 0.3 * (1 - d.hp / d.max_hp)      # worn down
+        k *= 1 + 0.12 * d.downs                   # been down before
+        k *= 1 + 0.05 * min(d.unanswered, 4)      # eating punch after punch
+        k *= random.uniform(0.9, 1.1)
+        return k / d.chin
+
+    def clean_hit(self, att, d, spec, target, hx, hy, ext=0.6):
+        name = att.action
         mult, chance, tags = 1.0, CRIT_CHANCE, []
-        crit = d.stun_t > 0                       # hitting a stunned boxer is always critical
-        if d.in_startup():
+        stunned = d.stun_t > 0
+        crit = stunned                            # hitting a stunned boxer is always critical
+        counter_hit = d.in_startup()
+        walking_in = d.moving == 1
+        if counter_hit:
             mult *= COUNTER_HIT_MULT
             chance += 0.12
             tags.append(("COUNTER HIT", (255, 200, 90)))
@@ -1638,10 +2467,20 @@ class Game:
         crit = crit or random.random() < chance
         if crit:
             mult *= CRIT_MULT
+        if counter_hit and ext > 0.7 and POWER[name] >= 2:
+            tags.insert(0, ("PERFECT TIMING!", (255, 255, 160)))
+        imp = self.impact(att, d, name, ext, counter_hit, walking_in, att.is_counter, crit, stunned)
         dmg = max(1, int(round(spec["spar_dmg"] * mult * att.power)))
         d.hp = max(0.0, d.hp - dmg)
         d.since_damage = 0.0
-        if target == "body":
+        att.dealt += dmg
+        att.unanswered = 0
+        d.unanswered += 1
+        if target == "head":
+            d.daze += dmg * (0.8 + 0.45 * imp) / d.chin * (1.15 if d.hurt else 1.0)
+            d.daze_t = 0.0
+        else:
+            d.body_dmg += dmg * (0.8 + 0.3 * imp)
             scale = d.max_hp / MAX_HP
             d.regen_cap = max(REGEN_CAP_MIN * scale, d.regen_cap - BODY_CAP_LOSS * scale)
         d.get_hit(target, spec["stun"] + (0.25 if crit else 0.0))
@@ -1660,6 +2499,12 @@ class Game:
             sp = random.uniform(40, 170 if crit else 110)
             self.parts.append([hx, hy, math.cos(a) * sp, math.sin(a) * sp - 30, random.uniform(0.18, 0.4),
                                random.choice([(255, 226, 120), (255, 255, 255), (255, 140, 100)])])
+        if imp >= 2.6 and target == "head":       # sweat spray off a big head shot
+            for _ in range(10):
+                a = random.uniform(-0.9, 0.9) + (0 if d.facing < 0 else math.pi)
+                sp = random.uniform(60, 140)
+                self.parts.append([hx, hy - 4, math.cos(a) * sp, math.sin(a) * sp - 50, random.uniform(0.3, 0.55),
+                                   random.choice([(200, 230, 255), (255, 255, 255)])])
         col = (255, 232, 130) if not crit else (255, 110, 70)
         self.say(str(dmg), hx - 6, hy - 14, col, self.font_xl if crit else self.font_l, vy=-26)
         y = hy - 30
@@ -1667,18 +2512,244 @@ class Game:
             self.say("CRITICAL!", hx - 28, y, (255, 120, 60), self.font_l, vy=-20, life=1.0)
             y -= 13
             self.flash_t = 0.08
-        for s, c in tags:
-            self.say(s, hx - 26, y, c, self.font_m, vy=-18, life=0.9)
+        for s, cc in tags:
+            self.say(s, hx - 26, y, cc, self.font_m, vy=-18, life=0.9)
             y -= 12
         self.hitstop = 0.12 if crit else spec["stop"]
         self.shake = 4 if crit else spec["shake"]
         self.shake_t = 0.18 if crit else 0.12
-        self.snd("crit" if crit else ("hit_cross" if big else "hit_jab"))
-        if d.hp <= 0:
-            d.ko, d.end_t = True, 0.0
+        if crit:
+            self.snd("crit")
+        elif target == "body":
+            self.snd("hit_body_big" if big else "hit_body")
+        else:
+            self.snd("hit_cross" if big else "hit_jab")
+        self.excite(0.04 + 0.07 * imp)
+        if self.arena and imp >= 2.7:
+            self.snd("ooh")
+
+        outcome = self.judge(att, d, name, target, imp)
+        if outcome == "cold":
+            self.knock_out_cold(d, att)
+        elif outcome == "down":
+            self.knockdown(d, att, "kd", imp)
+        elif outcome == "liver":
+            d.liver_t = 0.45
             d.hitstun = 0.0
-            self.hitstop = 0.25
-            self.end_fight(loser=d)
+            self.say("LIVER SHOT!", hx - 30, hy - 34, (255, 140, 200), self.font_l, vy=-14, life=0.5)
+            self.hitstop = 0.18
+            self.excite(0.4)
+        elif outcome == "hurt":
+            d.hurt = True
+            d.unanswered = 1
+            hx2, hy2 = d.head_pos()
+            self.say("HURT!" if d is self.cpu else "YOU'RE HURT!", hx2 - 18, hy2 - 22, (255, 170, 60), self.font_l,
+                     vy=-12, life=1.2)
+            self.excite(0.35)
+            if d is self.player:
+                self.snd("ringing")
+                self.beat_t = 0.0
+        elif outcome == "stop":
+            self.hitstop = 0.2
+            self.end_fight(loser=d, method="STOPPAGE")
+
+    def judge(self, att, d, name, target, imp):
+        """What a clean punch does beyond damage: None / hurt / down / liver / cold / stop."""
+        if target == "head":
+            if imp >= KO_IMPACT and random.random() < clamp(0.3 + (imp - KO_IMPACT) / 2.0, 0.0, 0.9):
+                return "cold"
+            if d.hp <= 0:
+                if imp >= KO_IMPACT * 0.88 and random.random() < 0.35:
+                    return "cold"
+                return "down"
+            if d.daze >= DAZE_DROP:
+                return "down"
+            if imp >= KD_IMPACT and random.random() < clamp(0.3 + (imp - KD_IMPACT) / 1.2, 0.0, 1.0):
+                return "down"
+            if d.daze >= DAZE_HURT and not d.hurt:
+                return "hurt"
+        else:
+            if (name == "body_cross" and d.body_dmg >= LIVER_BODY * d.chin
+                    and random.random() < clamp(0.25 + (d.body_dmg - LIVER_BODY * d.chin) / 40 + (imp - 2) / 4, 0.0, 0.85)):
+                return "liver"
+            if d.hp <= 0:
+                return "down"
+        if d.hurt and d.unanswered >= STOPPAGE_HITS:
+            return "stop"
+        return None
+
+    # ------------------------------------------------------------ knockdowns
+    def corner_x(self, f):
+        return MIN_X + 8 if f is self.player else STAGE_MAX_X - 8
+
+    def call_ref(self, d, wave=False):
+        """Referee steps in over the fighter d (from the side away from him)."""
+        tx = clamp(d.x + d.facing * 34, 24, VW - 24)
+        if not self.ref.on:
+            start = VW + 40 if d.facing > 0 else -40
+            self.ref.enter(start, tx, -d.facing)
+        else:
+            self.ref.tx, self.ref.facing = tx, -d.facing
+        if wave:
+            self.ref.set_pose("wave_a", 99)
+            self.ref.SPEED = 260.0
+
+    def fall_down(self, d):
+        d.finish_action()
+        d.block = d.want_block = None
+        d.buffer = None
+        d.hitstun = d.stun_t = 0.0
+        d.liver_t = 0.0
+        d.react = None
+        d.ghosts = []
+
+    def knockdown(self, d, att, kind, imp):
+        o = att
+        self.fall_down(d)
+        d.down, d.down_t, d.rising_t = True, 0.0, -1.0
+        d.downs += 1
+        o.kds += 1
+        final = d.downs >= MAX_DOWNS
+        self.dn = dict(who=d, other=o, kind=kind, count=0, up=False, up_t=0.0, box_t=-1.0, final=final,
+                       thud=False, imp=imp, next=None)
+        self.mash = 0.0
+        if d is self.player:
+            self.mash_need = MASH_NEED + 6 * (d.downs - 1) + (5 if kind == "liver" else 0) + int(3 * max(0.0, imp - KD_IMPACT))
+        else:
+            stay = 0.04 + 0.24 * (d.downs - 1) + (0.18 if kind == "liver" else 0.0) + clamp((imp - KD_IMPACT) / 3, 0, 0.25)
+            stay += 0.1 if d.hp <= 0 else 0.0
+            stay /= d.heart
+            if random.random() < stay:
+                self.dn["rise_at"] = None
+            else:
+                self.dn["rise_at"] = min(9, random.randint(3, 6) + d.downs + (2 if kind == "liver" else 0)
+                                         - (1 if d.heart > 1.3 else 0))
+        self.phase, self.phase_t = "down", 0.0
+        self.hitstop = 0.22
+        self.slowmo = 0.5
+        self.shake, self.shake_t = 5, 0.3
+        self.flash_t = 0.08
+        hx, hy = d.head_pos()
+        word = "DOWN GOES " + ("YOU" if d is self.player else self.opp_short()) + "!"
+        if kind == "liver":
+            word = "HE FOLDS!" if d is self.cpu else "DOUBLED OVER!"
+        self.say("KNOCKDOWN!", VW // 2 - self.font_xl.size("KNOCKDOWN!")[0] // 2, 50, (255, 90, 80), self.font_xl,
+                 vy=-4, life=1.15)
+        self.say(word, VW // 2 - self.font_m.size(word)[0] // 2, 70, (255, 232, 130), self.font_m, vy=-4, life=1.15)
+        self.snd("ko_boom")
+        self.snd("roar" if self.arena else "crowd")
+        self.excite(1.0)
+        self.combo = 0
+
+    def knock_out_cold(self, d, att):
+        self.fall_down(d)
+        d.out_cold, d.fall_t = True, 0.0
+        d.downs += 1
+        att.kds += 1
+        self.dn = None
+        self.hitstop = 0.3
+        self.slowmo = 1.2
+        self.shake, self.shake_t = 7, 0.45
+        self.flash_t = 0.08
+        self.thud_pending = d
+        self.snd("ko_boom")
+        self.end_fight(loser=d, method="OUT COLD")
+
+    def opp_short(self):
+        return self.opp["short"] if self.mode == "campaign" else "THE CPU"
+
+    def update_down(self, dt):
+        dn = self.dn
+        d, o = dn["who"], dn["other"]
+        # the man still standing goes to a neutral corner
+        o.want_block = None
+        cx = self.corner_x(o)
+        move = 0 if abs(o.x - cx) < 2 or self.phase_t < 0.4 else (1 if cx > o.x else -1)
+        if o is self.player:
+            o.update(dt, move, MIN_X, d.x - MIN_SEP)
+        else:
+            o.update(dt, move, d.x + MIN_SEP, STAGE_MAX_X)
+        d.update(dt, 0, MIN_X, STAGE_MAX_X)
+        if not dn["thud"] and d.down_t >= 0.42:
+            dn["thud"] = True
+            self.snd("canvas")
+            self.dust(d.x - d.facing * 10)
+        if self.phase_t > 0.55 and not self.ref.on:
+            self.call_ref(d)
+
+        if dn["final"]:                          # third knockdown: the referee waves it off
+            if self.phase_t > 1.3:
+                self.end_fight(loser=d, method="TKO")
+            return
+
+        if dn["next"] is None and self.phase_t >= COUNT_START and self.ref.arrived():
+            dn["next"] = self.phase_t
+        if (dn["next"] is not None and self.phase_t >= dn["next"] and dn["count"] < 10
+                and (not dn["up"] or dn["count"] < STANDING_COUNT)):
+            dn["next"] += COUNT_DT
+            dn["count"] += 1
+            self.ref.set_pose("down", 0.28)
+            self.snd("count")
+            self.excite(0.08)
+            if dn["count"] >= 10 and not dn["up"] and d.rising_t < 0:
+                self.end_fight(loser=d, method="KO")
+                return
+        elif self.ref.arrived() and self.ref.pose_t <= 0 and dn["box_t"] < 0:
+            self.ref.set_pose("up")
+
+        if not dn["up"]:
+            if d.rising_t < 0:
+                if d is self.player:
+                    self.mash = max(0.0, self.mash - MASH_DECAY * dt)
+                    if self.mash >= self.mash_need and dn["count"] >= 2:
+                        d.rising_t = 0.0
+                elif dn.get("rise_at") is not None and dn["count"] >= dn["rise_at"]:
+                    d.rising_t = 0.0
+            elif d.rising_t >= 0.55:
+                self.get_up(d)
+        else:
+            dn["up_t"] += dt
+            if dn["box_t"] < 0 and dn["count"] >= STANDING_COUNT and dn["up_t"] > 0.5:
+                dn["box_t"] = 0.0
+                self.ref.set_pose("point", 0.6)
+                self.say("BOX!", VW // 2 - 18, 70, (255, 232, 130), self.font_huge, vy=-8, life=0.9)
+                self.snd("bell")
+            if dn["box_t"] >= 0:
+                dn["box_t"] += dt
+                if dn["box_t"] > 0.55:
+                    self.ref.leave()
+                    self.phase, self.phase_t = "fight", 0.0
+                    self.dn = None
+                    self.ai.plan.clear()
+                    self.ai.def_plan = None
+                    self.player.buffer = None
+
+    def get_up(self, d):
+        dn = self.dn
+        d.down, d.rising_t = False, -1.0
+        dn["up"], dn["up_t"] = True, 0.0
+        frac = RISE_HP[min(d.downs - 1, len(RISE_HP) - 1)]
+        after = d.max_hp * frac if d.hp <= 0 else min(d.hp, d.max_hp * (frac + 0.15))
+        d.hp = d.hp_lag = after
+        scale = d.max_hp / MAX_HP
+        d.regen_cap = max(REGEN_CAP_MIN * scale, min(d.regen_cap, after + 10 * scale))
+        d.daze, d.hurt = 30.0, False
+        d.body_dmg *= 0.5
+        d.guard = float(GUARD_MAX)
+        d.unanswered = 0
+        d.since_damage = 0.0
+        hx, hy = d.head_pos()
+        self.say("YOU'RE UP!" if d is self.player else "HE'S UP!", hx - 24, hy - 24, (150, 240, 160), self.font_l,
+                 vy=-10, life=1.2)
+        self.snd("cheer" if self.arena else "block")
+        self.excite(0.5)
+
+    def dust(self, x):
+        for _ in range(16):
+            a = random.uniform(math.pi * 1.05, math.pi * 1.95)
+            sp = random.uniform(20, 70)
+            self.parts.append([x + random.uniform(-14, 14), GROUND - 1, math.cos(a) * sp, math.sin(a) * sp * 0.5,
+                               random.uniform(0.25, 0.5), random.choice([(214, 214, 230), (180, 182, 204)])])
 
     # ------------------------------------------------------------ bag hits
     def check_bag_hit(self):
@@ -1749,8 +2820,15 @@ class Game:
     # ------------------------------------------------------------ drawing
     def draw(self, out):
         c = self.canvas
-        c.blit(self.bg, (0, 0))
         p = self.player
+        if self.arena:
+            c.blit(self.arena_bg, (0, 0))
+            self.crowd.draw(c, self.clock, self.hype)
+            self.draw_sweep(c)
+            c.blit(self.arena_bg, (0, 101), (0, 101, VW, VH - 101))   # boards, ropes, ring in front of the fans
+            c.blit(self.lights, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+        else:
+            c.blit(self.bg, (0, 0))
         champ = self.mode == "campaign" and self.phase == "champion"
         if champ:
             self.draw_spotlight(c, p.x + 4)
@@ -1764,11 +2842,20 @@ class Game:
             cpu = self.cpu
             order = [cpu, p] if not (cpu.action in PUNCHES and p.action not in PUNCHES) else [p, cpu]
             for f in order:
-                f.draw(c)
+                if f.out_cold:
+                    f.draw(c)
+            for f in order:
+                if not f.out_cold:
+                    f.draw(c)
+            self.ref.draw(c, self.clock)
+            for f in order:
+                self.draw_dizzy(c, f)
             if p.counter_t > 0 and int(p.counter_t * 14) % 2 == 0 and self.phase == "fight":
                 draw_text(c, self.font_s, "COUNTER READY", p.x + 6, GROUND - 96, (120, 220, 255), center=True)
         if self.mode == "campaign" and self.phase == "defeat":
             self.draw_defeat_mood(c)
+        if self.mode != "bag" and p.hurt and self.phase == "fight":
+            self.draw_hurt_vignette(c)
 
         for s in self.stars:
             self.draw_star(c, s)
@@ -1802,6 +2889,83 @@ class Game:
             ox = random.randint(-self.shake, self.shake)
             oy = random.randint(-self.shake, self.shake)
         out.blit(c, (ox, oy))
+
+    def draw_sweep(self, c):
+        """Two search lights sweeping the crowd before the fight and during the celebrations."""
+        if self.phase not in ("walkin", "talk", "reply", "intro", "champion"):
+            return
+        for k, sp in ((0, 0.7), (1, -0.55)):
+            x = VW / 2 + math.sin(self.clock * sp + k * 2.1) * VW * 0.45
+            glow = self.sweep_glow
+            c.blit(glow, (int(x) - glow.get_width() // 2, 18), special_flags=pygame.BLEND_RGB_ADD)
+
+    def draw_dizzy(self, c, f):
+        """Little stars circling the head of a hurt / downed / knocked-out fighter."""
+        if not (f.hurt or f.down or f.out_cold or (f.ko and not f.won)):
+            return
+        hx, hy = f.head_pos()
+        n = 3 if f.hurt and not (f.down or f.out_cold or f.ko) else 4
+        for i in range(n):
+            a = self.clock * 5 + i * math.tau / n
+            x = hx + math.cos(a) * 9
+            y = hy - 8 + math.sin(a) * 3
+            col = (255, 236, 110) if i % 2 == 0 else (255, 255, 255)
+            if math.sin(a) < 0:
+                col = darken(col, 0.35)
+            c.fill(col, (int(x), int(y) - 1, 1, 3))
+            c.fill(col, (int(x) - 1, int(y), 3, 1))
+
+    def draw_hurt_vignette(self, c):
+        k = 0.5 + 0.5 * math.sin(self.clock * 7.4)
+        a = int(40 + 50 * k)
+        v = pygame.Surface((VW, VH), pygame.SRCALPHA)
+        for i in range(10):
+            col = (180, 10, 20, max(0, a - i * 9))
+            pygame.draw.rect(v, col, (i, i, VW - 2 * i, VH - 2 * i), 1)
+        c.blit(v, (0, 0))
+
+    def draw_count(self, c):
+        dn = self.dn
+        if not dn:
+            return
+        d = dn["who"]
+        n = dn["count"]
+        gold, white = (255, 232, 130), (230, 232, 250)
+        if dn["final"]:
+            if self.phase_t > 0.6:
+                draw_text(c, self.font_l, "THIRD KNOCKDOWN!", VW // 2, 52, (255, 90, 80), center=True)
+            return
+        if n > 0:
+            k = clamp((self.phase_t - (dn["next"] - COUNT_DT)) / 0.25, 0.0, 1.0) if dn["next"] else 1.0
+            font = self.font_huge if k >= 1 else self.font_xl
+            col = (255, 90, 80) if n >= 8 and not dn["up"] else gold
+            draw_text(c, font, str(n), VW // 2, 46 if k >= 1 else 50, col, center=True)
+        if d is self.player and not dn["up"]:
+            if d.rising_t >= 0:
+                draw_text(c, self.font_m, "GETTING UP...", VW // 2, 78, (150, 240, 160), center=True)
+            else:
+                blink = int(self.clock * 6) % 2 == 0
+                draw_text(c, self.font_m, "MASH  A  S  D  F  TO GET UP!", VW // 2, 78, gold if blink else white,
+                          center=True)
+                w = 110
+                x = VW // 2 - w // 2
+                pygame.draw.rect(c, (20, 14, 30), (x - 1, 91, w + 2, 7))
+                c.fill((52, 40, 62), (x, 92, w, 5))
+                f = clamp(self.mash / self.mash_need, 0.0, 1.0)
+                c.fill((120, 230, 140) if n >= 2 or f < 1 else (240, 210, 70), (x, 92, int(w * f), 5))
+                c.fill((200, 255, 210), (x, 92, int(w * f), 1))
+        elif dn["up"] and n < STANDING_COUNT:
+            draw_text(c, self.font_s, "STANDING EIGHT COUNT", VW // 2, 78, white, center=True)
+
+    def draw_kd_pips(self, c, f, x, y, right):
+        for i in range(MAX_DOWNS):
+            px = (x - 7 * i - 5) if right else (x + 7 * i)
+            pygame.draw.rect(c, (20, 14, 30), (px - 1, y - 1, 7, 5))
+            if i < f.downs:
+                c.fill((236, 70, 60), (px, y, 5, 3))
+                c.fill((255, 160, 140), (px, y, 5, 1))
+            else:
+                pygame.draw.rect(c, (120, 112, 150), (px, y, 5, 3), 1)
 
     def draw_star(self, c, s):
         k = s["t"] / s["life"]
@@ -1859,6 +3023,9 @@ class Game:
             return
         p = self.player                               # a little rain cloud over the loser
         cx, cy = int(p.x) + 8, GROUND - SPRITE_FEET + 14
+        if p.out_cold:
+            hx, hy = p.head_pos()
+            cx, cy = int(hx) + 4, int(hy) - 34
         for x in range(-10, 11, 2):
             for k in range(3):
                 yy = cy + 4 + ((self.clock * 70 + x * 7 + k * 9) % 22)
@@ -1944,6 +3111,8 @@ class Game:
             c.blit(self.belt_small, (VW - 8 - self.font_s.size(name)[0] - 21, 13))
         self.draw_bar(c, 8, 24, 76, self.player, False)
         self.draw_bar(c, VW - 8 - 76, 24, 76, self.cpu, True)
+        self.draw_kd_pips(c, self.player, 8, 40, False)
+        self.draw_kd_pips(c, self.cpu, VW - 8, 40, True)
         secs = int(math.ceil(self.round_time))
         tcol = (255, 232, 130) if secs > 10 or int(self.clock * 4) % 2 else (255, 90, 80)
         draw_text(c, self.font_l, "%02d" % secs, VW // 2, 32, tcol, center=True)
@@ -1960,16 +3129,24 @@ class Game:
             draw_text(c, self.font_huge, msg, VW // 2, 54, (255, 232, 130), center=True)
             sub = ("FIGHT %d OF %d" % (self.stage + 1, len(CAMPAIGN))) if camp else "1 EASY   2 NORMAL   3 HARD"
             draw_text(c, self.font_s, sub, VW // 2, 83, label, center=True)
+        elif self.phase == "down":
+            self.draw_count(c)
         elif self.phase == "ko":
-            msg = "TIME!" if self.end_reason == "time" else "K.O.!"
-            draw_text(c, self.font_huge, msg, VW // 2, 58, (255, 90, 80), center=True)
+            if self.end_reason == "time":
+                draw_text(c, self.font_huge, "TIME!", VW // 2, 52, (255, 90, 80), center=True)
+                if self.phase_t > 0.7:
+                    draw_text(c, self.font_s, "GOING TO THE JUDGES' SCORECARDS...", VW // 2, 82, white, center=True)
+            elif self.phase_t > 0.25:
+                pulse = (255, 90, 80) if int(self.clock * 6) % 2 else (255, 200, 90)
+                draw_text(c, self.font_huge, self.METHOD_TEXT[self.method], VW // 2, 50, pulse, center=True)
+                draw_text(c, self.font_s, self.METHOD_SUB[self.method], VW // 2, 80, white, center=True)
         elif self.phase == "walkin":
             self.draw_name_card(c)
         elif self.phase == "victory":
             self.banner(c, 40, 36)
             draw_text(c, self.font_xl, "VICTORY!", VW // 2, 43, (120, 240, 140), center=True)
             nxt = CAMPAIGN[self.stage + 1]
-            draw_text(c, self.font_s, "%d OF %d DOWN   -   NEXT UP: %s" % (self.stage + 1, len(CAMPAIGN), nxt["short"]),
+            draw_text(c, self.font_s, "%s   -   NEXT UP: %s" % (self.method_line(), nxt["short"]),
                       VW // 2, 63, white, center=True)
             if int(self.clock * 2.5) % 2 == 0:
                 draw_text(c, self.font_s, "PRESS ENTER FOR THE NEXT FIGHT", VW // 2, 66 + 10, gold, center=True)
@@ -1987,9 +3164,18 @@ class Game:
         elif self.phase == "result":
             self.banner(c, 46, 56)
             col = (120, 240, 140) if self.result == "YOU WIN!" else ((255, 232, 130) if self.result == "DRAW" else (255, 90, 80))
-            draw_text(c, self.font_huge, self.result, VW // 2, 49, col, center=True)
-            draw_text(c, self.font_m, "ENTER  REMATCH        TAB  BACK TO BAG", VW // 2, 78, (230, 232, 250), center=True)
-            draw_text(c, self.font_s, "1 EASY   2 NORMAL   3 HARD", VW // 2, 91, label, center=True)
+            draw_text(c, self.font_huge, self.result, VW // 2, 47, col, center=True)
+            draw_text(c, self.font_s, self.method_line(), VW // 2, 69, label, center=True)
+            draw_text(c, self.font_m, "ENTER  REMATCH        TAB  BACK TO BAG", VW // 2, 80, (230, 232, 250), center=True)
+            draw_text(c, self.font_s, "1 EASY   2 NORMAL   3 HARD", VW // 2, 92, label, center=True)
+
+    def method_line(self):
+        m = self.method or "DECISION"
+        if m == "DECISION":
+            return "WON ON THE JUDGES' SCORECARDS" if self.result == "YOU WIN!" else "LOST ON THE JUDGES' SCORECARDS"
+        if m == "DRAW":
+            return "SCORED A DRAW"
+        return "BY %s  -  %s" % (self.METHOD_TEXT[m].rstrip("!"), self.METHOD_SUB[m])
 
     def banner(self, c, y, h):
         band = pygame.Surface((VW, h), pygame.SRCALPHA)
