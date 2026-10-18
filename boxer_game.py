@@ -70,12 +70,15 @@ Knockdowns and knockouts
     * If a HURT fighter keeps eating punches without firing back, the referee stops it (T.K.O.).
     * Go the distance and the judges decide (knockdowns count for a lot).
 
-Campaign
-    * Fought in a packed arena: Rusty Rick -> Bruno "The Bulldozer" -> "Lightning" Lee ->
-      Victor "The Crown" Reyes, the lightweight champion. Each has his own look, chin,
-      fighting style and trash talk. The crowd reacts to every big punch.
-    * You start every fight at full health. Lose once and you start over at fight 1.
-    * ENTER / SPACE skips dialogue and moves on between fights.
+Career (story mode)
+    * CAMPAIGN (or C) opens your career: twelve fights from a club show to the world title,
+      with your trainer Doc Hayes in the corner and a conversation before and after every one.
+    * Lose and the story does NOT reset - you take a tune-up fight to rebuild, then get the man
+      who beat you again. Three losses and the commission pulls your licence: that career is over.
+    * Win the belt and you get the ending. What is said on the boat depends on whether you
+      got there unbeaten or the hard way.
+    * After any fight: ENTER carries on, S saves your career and drops you back at the gym.
+      Next time you press CAMPAIGN you can continue where you left off or start a new career.
 
 Setup:   pip install pygame
 Run:     python boxer_game.py            (optional: --scale=5 for a bigger window)
@@ -85,9 +88,12 @@ The character sprites are embedded at the bottom of this file, so this is the on
 import array
 import base64
 import io
+import json
 import math
+import os
 import random
 import sys
+import tempfile
 
 import pygame
 
@@ -180,6 +186,9 @@ STAM_REGEN = 11.5            # recovered per second when you give yourself a bre
 STAM_REGEN_DELAY = 0.55      # ...this long after your last punch
 STAM_REGEN_IDLE = 1.8        # standing still (not walking, not blocking) recovers this much faster
 GAS_LINE = 30                # below this you are GASSED
+STAM_GUARD_REGEN = 1.1       # YOU get your wind back behind a high/low guard (you aren't punching)...
+STAM_MOVE_REGEN = 1.0        # ...and on the move. Taking one clean stops it for a moment:
+STAM_HIT_PAUSE = 0.9         # seconds of no recovery after you get caught
 STAM_DOWN_COST = 22          # a knockdown takes it out of you
 STAM_RISE = 55               # stamina you get up with
 PLAYER_CHIN = 1.1            # your chin (the computer boxers' chins are in CAMPAIGN; sparring CPU = 1.0)
@@ -311,52 +320,362 @@ def look_palette(glove=None, shorts=None, skin=None, hair=None, boots=None):
 SPAR_LOOK = dict(glove=(52, 110, 230), shorts=(196, 40, 52), skin=(170, 108, 70), hair=(232, 196, 92),
                  boots=(64, 66, 90))
 
-# ============================================================ campaign
+# ============================================================ the cast
 #   look   : colours (see look_palette)          level/ai : AI difficulty + overrides (see LEVELS)
 #   style  : how much he likes each punch        hp/power/speed/walk : health, punch damage,
-#   taunt  : pre-fight animation                                       animation speed, footspeed
-#   chin   : how much punishment his head takes before he drops      heart : how hard he fights to beat the count
-#   wind   : his gas tank - how slowly he tires and how fast he recovers
-CAMPAIGN = [
-    dict(name='RICK "RUSTY" MALONE', short="RUSTY RICK", title="JOURNEYMAN   -   RECORD 8-11",
-         color=(150, 230, 160), look=dict(glove=(236, 236, 242), shorts=(56, 156, 84), skin=(250, 200, 156),
-                                          hair=(196, 88, 40)),
-         level="EASY", ai=dict(pace=0.4), style=dict(jab=1.6), hp=80, power=0.9, speed=1.0, walk=1.0, taunt="shadowbox", chin=0.85, heart=0.8, wind=0.75,
-         intro="Fresh meat! Hope you packed a lunch, 'cause you're about to get SERVED!",
-         reply="Order up, Rusty. Hope you like it extra crispy.",
-         win="Ha! Back to the punching bag, rookie!",
-         lose="Ow... my everything..."),
-    dict(name='BRUNO "THE BULLDOZER" KASK', short="BULLDOZER", title="HEAVY HITTER   -   RECORD 14-4",
-         color=(255, 170, 90), look=dict(glove=(240, 128, 40), shorts=(52, 48, 64), skin=(214, 150, 100),
-                                         hair="bald", boots=(52, 48, 64)),
-         level="NORMAL", ai=dict(react=0.45, slip=0.08, parry=0.2, atk=(0.8, 1.6), pace=0.5, feint=0.08),
-         style=dict(jab=0.6, cross=2.5, body_cross=2.5), hp=120, power=1.12, speed=0.92, walk=0.85, taunt="roar",
-         chin=1.2, heart=1.2, wind=0.8,
-         intro="NOTHING stops the Bulldozer! I'm gonna flatten you like a PANCAKE!",
-         reply="Even bulldozers run out of gas, big guy.",
-         win="FLATTENED! Somebody scrape this guy off my canvas!",
-         lose="Who... turned off... the engine..."),
-    dict(name='"LIGHTNING" LEE PARK', short="LIGHTNING LEE", title="SPEED DEMON   -   RECORD 19-2",
-         color=(200, 160, 255), look=dict(glove=(150, 70, 214), shorts=(240, 206, 56), skin=(232, 182, 132),
-                                          hair=(34, 34, 48)),
-         level="NORMAL", ai=dict(react=0.78, slip=0.5, parry=0.35, delay=(0.05, 0.12), atk=(0.45, 1.0),
-                                 combo=0.55, punish=0.65, pace=1.0, feint=0.3, learn=1.2),
-         style=dict(jab=2.5, body_jab=1.5), hp=95, power=1.0, speed=1.18, walk=1.35, taunt="weave",
-         chin=0.92, heart=1.0, wind=1.35,
-         intro="Better not blink. I'll be done before your health bar even loads!",
-         reply="Lightning never strikes twice. I do.",
-         win="Too slow! Try again in slow motion.",
-         lose="Impossible... nobody's faster than me!"),
-    dict(name='VICTOR "THE CROWN" REYES', short="THE CROWN", title="LIGHTWEIGHT CHAMPION   -   RECORD 40-0",
-         color=(255, 214, 90), champ=True,
-         look=dict(glove=(44, 40, 54), shorts=(232, 180, 56), skin=(196, 128, 88), hair=(26, 22, 28)),
-         level="HARD", ai=dict(parry=0.5, pace=1.1, feint=0.34), style=dict(), hp=122, power=1.08, speed=1.06, walk=1.1, taunt="belt",
-         chin=1.15, heart=1.45, wind=1.15,
-         intro="Forty fights. Forty knockouts. You want my belt? Come and take it... if you dare.",
-         reply="I didn't come here to lose. That belt is MINE.",
-         win="You were never on my level.",
-         lose="The crown... is yours, kid. Wear it well."),
+#   taunt  : pre-fight animation                                      animation speed, footspeed
+#   chin   : how much punishment his head takes  heart : how hard he fights to beat the count
+#   wind   : his gas tank                        champ : wears the belt
+FIGHTERS = {
+    "rusty": dict(name='RICK "RUSTY" MALONE', short="RUSTY RICK", title="JOURNEYMAN   -   RECORD 8-11",
+                  color=(150, 230, 160),
+                  look=dict(glove=(236, 236, 242), shorts=(56, 156, 84), skin=(250, 200, 156), hair=(196, 88, 40)),
+                  level="EASY", ai=dict(pace=0.4), style=dict(jab=1.6),
+                  hp=80, power=0.9, speed=1.0, walk=1.0, chin=0.85, heart=0.8, wind=0.75, taunt="shadowbox",
+                  intro="Fresh meat! Hope you packed a lunch, 'cause you're about to get SERVED!",
+                  reply="Order up, Rusty. Hope you like it extra crispy.",
+                  win="Ha! Back to the punching bag, rookie!",
+                  lose="Ow... my everything..."),
+    "pike": dict(name='TOMMY "TWO-TON" PIKE', short="TWO-TON PIKE", title="CLUB FIGHTER   -   RECORD 11-6",
+                 color=(180, 200, 240),
+                 look=dict(glove=(60, 70, 110), shorts=(200, 206, 230), skin=(238, 190, 146), hair=(120, 96, 60),
+                           boots=(60, 70, 110)),
+                 level="EASY", ai=dict(react=0.42, pace=0.45, atk=(0.8, 1.8)), style=dict(cross=2.0, body_cross=1.6),
+                 hp=105, power=1.1, speed=0.88, walk=0.8, chin=1.1, heart=1.0, wind=0.7, taunt="roar",
+                 intro="They call me Two-Ton 'cause that's what it feels like. Ask my last four opponents.",
+                 reply="Two tons of slow. I'll be gone before it lands.",
+                 win="Timber! Hah! Down like a tree.",
+                 lose="Heavy hands... ain't worth much... if they don't land..."),
+    "dunne": dict(name='MARCUS "THE MECHANIC" DUNNE', short="THE MECHANIC", title="TECHNICIAN   -   RECORD 15-3",
+                  color=(140, 220, 230),
+                  look=dict(glove=(40, 150, 160), shorts=(28, 36, 54), skin=(150, 100, 66), hair=(26, 22, 30),
+                            boots=(230, 232, 240)),
+                  level="NORMAL", ai=dict(react=0.7, parry=0.35, wrong=0.08, atk=(0.7, 1.4), pace=0.85, feint=0.2),
+                  style=dict(jab=2.4, cross=1.2), hp=100, power=0.95, speed=1.05, walk=1.1,
+                  chin=1.0, heart=1.1, wind=1.1, taunt="shadowbox",
+                  intro="I don't brawl. I take men apart, one bolt at a time. Hold still.",
+                  reply="I've seen your tape, Marcus. Everything you throw, I've already read.",
+                  win="Dismantled. Nothing personal - just engineering.",
+                  lose="You... changed the pattern. Nobody changes the pattern..."),
+    "cruz": dict(name='DANTE "SUGAR" CRUZ', short="SUGAR CRUZ", title="UNBEATEN PROSPECT   -   RECORD 17-0",
+                 color=(255, 170, 215),
+                 look=dict(glove=(236, 90, 160), shorts=(250, 246, 240), skin=(206, 140, 96), hair=(30, 24, 32),
+                           boots=(236, 90, 160)),
+                 level="NORMAL", ai=dict(react=0.72, slip=0.45, parry=0.35, delay=(0.05, 0.13), atk=(0.5, 1.1),
+                                         combo=0.5, punish=0.6, pace=1.0, feint=0.28, learn=1.1),
+                 style=dict(jab=2.0, cross=1.4), hp=100, power=1.0, speed=1.12, walk=1.25,
+                 chin=0.95, heart=1.2, wind=1.2, taunt="weave",
+                 intro="Everybody gets one night that matters. This is yours. Enjoy it - I'm taking it.",
+                 reply="You've been handed everything, Sugar. I've been taking mine.",
+                 win="Nothing personal. Somebody's got to be the guy on my record.",
+                 lose="How... I've never even been DOWN before..."),
+    "cruz2": dict(name='DANTE "SUGAR" CRUZ', short="SUGAR CRUZ", title="TOP CONTENDER   -   RECORD 24-1",
+                  color=(255, 170, 215),
+                  look=dict(glove=(236, 90, 160), shorts=(250, 246, 240), skin=(206, 140, 96), hair=(30, 24, 32),
+                            boots=(236, 90, 160)),
+                  level="HARD", ai=dict(react=0.76, slip=0.45, parry=0.38, atk=(0.55, 1.15), combo=0.5, punish=0.65,
+                                        pace=1.0, feint=0.3, learn=1.2),
+                  style=dict(jab=1.8, cross=1.5, body_cross=1.2), hp=106, power=1.04, speed=1.12, walk=1.25,
+                  chin=1.0, heart=1.3, wind=1.2, taunt="weave",
+                  intro="I've thought about you every day since. Tonight I take it all back.",
+                  reply="Then you already know how this ends, Dante.",
+                  win="Told you. The first one wasn't the fluke - YOU were.",
+                  lose="Go get him, man. Go take that belt. You earned it twice."),
+    "bulldozer": dict(name='BRUNO "THE BULLDOZER" KASK', short="BULLDOZER", title="HEAVY HITTER   -   RECORD 14-4",
+                      color=(255, 170, 90),
+                      look=dict(glove=(240, 128, 40), shorts=(52, 48, 64), skin=(214, 150, 100), hair="bald",
+                                boots=(52, 48, 64)),
+                      level="NORMAL", ai=dict(react=0.45, slip=0.08, parry=0.2, atk=(0.8, 1.6), pace=0.5, feint=0.08),
+                      style=dict(jab=0.6, cross=2.5, body_cross=2.5), hp=120, power=1.12, speed=0.92, walk=0.85,
+                      chin=1.2, heart=1.2, wind=0.8, taunt="roar",
+                      intro="NOTHING stops the Bulldozer! I'm gonna flatten you like a PANCAKE!",
+                      reply="Even bulldozers run out of gas, big guy.",
+                      win="FLATTENED! Somebody scrape this guy off my canvas!",
+                      lose="Who... turned off... the engine..."),
+    "razor": dict(name='KENJI "RAZOR" WATANABE', short="RAZOR", title="COUNTER PUNCHER   -   RECORD 20-2",
+                  color=(190, 220, 255),
+                  look=dict(glove=(190, 212, 240), shorts=(160, 30, 46), skin=(232, 186, 140), hair=(24, 22, 30),
+                            boots=(160, 30, 46)),
+                  level="NORMAL", ai=dict(react=0.66, slip=0.32, parry=0.33, delay=(0.05, 0.13), atk=(0.8, 1.7),
+                                          punish=0.6, pace=0.9, feint=0.22, learn=1.1),
+                  style=dict(jab=1.6, cross=1.8), hp=96, power=1.02, speed=1.08, walk=1.15,
+                  chin=0.92, heart=1.05, wind=1.1, taunt="shadowbox",
+                  intro="Throw whatever you like. Every punch you throw, I throw back sharper.",
+                  reply="Then I'll make you lead for once.",
+                  win="You kept giving me openings. I only needed the one.",
+                  lose="You never... gave me anything to counter..."),
+    "lee": dict(name='"LIGHTNING" LEE PARK', short="LIGHTNING LEE", title="SPEED DEMON   -   RECORD 19-2",
+                color=(200, 160, 255),
+                look=dict(glove=(150, 70, 214), shorts=(240, 206, 56), skin=(232, 182, 132), hair=(34, 34, 48)),
+                level="NORMAL", ai=dict(react=0.78, slip=0.5, parry=0.35, delay=(0.05, 0.12), atk=(0.45, 1.0),
+                                        combo=0.55, punish=0.65, pace=1.0, feint=0.3, learn=1.2),
+                style=dict(jab=2.5, body_jab=1.5), hp=95, power=1.0, speed=1.18, walk=1.35,
+                chin=0.92, heart=1.0, wind=1.35, taunt="weave",
+                intro="Better not blink. I'll be done before your health bar even loads!",
+                reply="Lightning never strikes twice. I do.",
+                win="Too slow! Try again in slow motion.",
+                lose="Impossible... nobody's faster than me!"),
+    "preacher": dict(name='ELI "THE PREACHER" BOONE', short="THE PREACHER", title="OLD LION   -   RECORD 38-12",
+                     color=(230, 220, 190),
+                     look=dict(glove=(90, 72, 56), shorts=(40, 38, 48), skin=(120, 78, 54), hair=(220, 220, 226),
+                               boots=(90, 72, 56)),
+                     level="NORMAL", ai=dict(react=0.76, slip=0.3, parry=0.42, atk=(0.85, 1.8), punish=0.7,
+                                             guard_up=0.3, pace=1.05, feint=0.3, learn=1.25),
+                     style=dict(jab=1.8, body_jab=1.8, body_cross=1.6), hp=100, power=0.98, speed=0.98, walk=0.95,
+                     chin=1.1, heart=1.3, wind=1.2, taunt="belt",
+                     intro="Fifty fights, son. I have been hit by better men than you on worse nights than this.",
+                     reply="Respect, old man. But you're standing in my doorway.",
+                     win="Patience, son. You'll learn it. Everybody does, eventually.",
+                     lose="Took you long enough... now go on. Go take the thing I never got."),
+    "sal": dict(name='BIG SAL MARCONI', short="BIG SAL", title="THE GATEKEEPER   -   RECORD 26-5",
+                color=(255, 140, 120),
+                look=dict(glove=(170, 32, 40), shorts=(30, 32, 44), skin=(224, 168, 120), hair=(70, 50, 36),
+                          boots=(170, 32, 40)),
+                level="HARD", ai=dict(react=0.7, slip=0.1, parry=0.3, atk=(0.6, 1.2), flurry=0.8, combo=0.6,
+                                      pace=0.7, feint=0.15),
+                style=dict(cross=2.0, body_cross=2.2, body_jab=1.4), hp=126, power=1.1, speed=0.95, walk=0.9,
+                chin=1.2, heart=1.25, wind=0.85, taunt="roar",
+                intro="Nobody gets past me without paying the toll. Cash, or blood. Your pick.",
+                reply="Put it on my tab, Sal.",
+                win="Toll's paid. In blood. Come back when you can afford it.",
+                lose="Gate's... open, kid. Don't make me regret it."),
+    "volkov": dict(name='DMITRI "THE SIBERIAN" VOLKOV', short="VOLKOV", title="FINAL ELIMINATOR   -   RECORD 29-1",
+                   color=(170, 220, 255),
+                   look=dict(glove=(220, 226, 238), shorts=(36, 70, 130), skin=(238, 206, 180), hair=(226, 220, 200),
+                             boots=(36, 70, 130)),
+                   level="HARD", ai=dict(react=0.78, parry=0.4, atk=(0.55, 1.15), combo=0.55, punish=0.68,
+                                         pace=1.05, feint=0.28, learn=1.3),
+                   style=dict(jab=1.4, cross=1.8, body_cross=1.5), hp=112, power=1.06, speed=1.02, walk=1.0,
+                   chin=1.08, heart=1.35, wind=1.15, taunt="shadowbox",
+                   intro="One of us fights for the title. The other one goes home. I am not going home.",
+                   reply="Neither am I, Dmitri. Let's find out who's lying.",
+                   win="Go home. The title was never yours to want.",
+                   lose="Cold... I have never felt cold... in the ring before..."),
+    "reyes": dict(name='VICTOR "THE CROWN" REYES', short="THE CROWN",
+                  title="LIGHTWEIGHT CHAMPION   -   RECORD 40-0", champ=True, color=(255, 214, 90),
+                  look=dict(glove=(44, 40, 54), shorts=(232, 180, 56), skin=(196, 128, 88), hair=(26, 22, 28)),
+                  level="HARD", ai=dict(parry=0.5, pace=1.1, feint=0.34), style=dict(),
+                  hp=118, power=1.05, speed=1.06, walk=1.1, chin=1.1, heart=1.45, wind=1.1, taunt="belt",
+                  intro="Forty fights. Forty knockouts. You want my belt? Come and take it... if you dare.",
+                  reply="I didn't come here to lose. That belt is MINE.",
+                  win="You were never on my level.",
+                  lose="The crown... is yours, kid. Wear it well."),
+    # --- tune-up opponents: who you get when you have to rebuild
+    "joe": dict(name='JOE "HAMMERS" HENDRY', short="HAMMERS JOE", title="SHORT NOTICE   -   RECORD 9-9",
+                color=(200, 190, 160),
+                look=dict(glove=(150, 140, 110), shorts=(90, 70, 50), skin=(246, 196, 150), hair=(150, 120, 70),
+                          boots=(150, 140, 110)),
+                level="EASY", ai=dict(react=0.4, pace=0.45), style=dict(cross=1.6),
+                hp=92, power=1.0, speed=0.95, walk=0.95, chin=0.95, heart=0.9, wind=0.8, taunt="shadowbox",
+                intro="Took this on three days' notice. No hard feelings - I just need the purse.",
+                reply="Same, Joe. Let's make it quick and clean.",
+                win="Sorry, pal. I needed it more.",
+                lose="No shame in it. Go get your career back."),
+    "rios": dict(name='CARLOS "EL TORO" RIOS', short="EL TORO", title="COMEBACK BOUT   -   RECORD 13-8",
+                 color=(255, 180, 140),
+                 look=dict(glove=(220, 60, 40), shorts=(240, 200, 60), skin=(180, 118, 76), hair=(30, 26, 30),
+                           boots=(220, 60, 40)),
+                 level="NORMAL", ai=dict(react=0.46, slip=0.12, atk=(0.85, 1.7), flurry=0.5, pace=0.5),
+                 style=dict(cross=1.8, body_cross=1.8), hp=98, power=1.0, speed=0.96, walk=1.0,
+                 chin=1.0, heart=1.05, wind=0.8, taunt="roar",
+                 intro="They tell me you lost. Good. I eat men who are already bleeding.",
+                 reply="Then you're going to choke, Carlos.",
+                 win="El Toro doesn't lose to damaged goods.",
+                 lose="You had nothing left... and you still had more than me."),
+    # --- your corner. Not a fighter any more, but he was.
+    "doc": dict(name="DOC HAYES", short="DOC", title="YOUR TRAINER", color=(255, 226, 150),
+                look=dict(glove=(120, 120, 130), shorts=(60, 58, 74), skin=(176, 124, 86), hair=(226, 226, 232),
+                          boots=(60, 58, 74))),
+    "you": dict(name="YOU", short="YOU", title="", color=(130, 200, 255), look=None),
+}
+
+# ============================================================ the road to the title
+#   opp   : who you fight          bout : how the bout is billed
+#   pre   : the scene before it    won / lost : the scene after it
+CAREER = [
+    dict(opp="rusty", act=1, bout="PRO DEBUT   -   4 ROUNDS",
+         pre=[("doc", "Four years in my gym and you still can't leave the heavy bag alone."),
+              ("doc", "Tonight that stops. Club show, forty people, a guy who's lost eleven."),
+              ("you", "Forty people is thirty-nine more than usually watch me."),
+              ("doc", "Then give 'em something. Jab, breathe, don't fall in love with the big one.")],
+         won=[("doc", "That's a pro record now, kid. 1 and 0."),
+              ("you", "Felt like it took an hour."),
+              ("doc", "It took ninety seconds. You'll learn the difference.")],
+         lost=[("doc", "Hey. Look at me. Everybody loses. The ones who matter lose EARLY."),
+               ("you", "That's supposed to help?"),
+               ("doc", "No. This is: I got you another one. Six weeks. Don't waste 'em.")]),
+    dict(opp="pike", act=1, bout="4 ROUNDS   -   LIGHTWEIGHT",
+         pre=[("doc", "Pike's a big slow kid with a hammer in his right hand."),
+              ("doc", "He only lands it on people who stand still. So don't."),
+              ("you", "Move, jab, don't be where the hammer is."),
+              ("doc", "Now you're a boxer.")],
+         won=[("doc", "See? He got tired carrying all that beef around."),
+              ("you", "He hit me once and I saw my whole childhood."),
+              ("doc", "Then stop getting hit.")],
+         lost=[("doc", "You stood in front of him. I TOLD you about standing in front of him."),
+               ("you", "...I know."),
+               ("doc", "Good. Knowing's the cheap part. Now go pay for it in the gym.")]),
+    dict(opp="dunne", act=1, bout="6 ROUNDS   -   LIGHTWEIGHT",
+         pre=[("doc", "Marcus Dunne. Technician. He finds your pattern and he lives in it."),
+              ("you", "So I don't give him one."),
+              ("doc", "Attaboy. Mix the levels. Feint him - make him commit to nothing.")],
+         won=[("doc", "You feinted a man who reads patterns into reading one that wasn't there."),
+              ("you", "That's the first time I've out-THOUGHT somebody."),
+              ("doc", "Won't be the last. People are starting to call about you.")],
+         lost=[("doc", "He solved you by the third. Read you like a bus timetable."),
+               ("you", "He knew the cross was coming before I did."),
+               ("doc", "Then throw something else. That's the whole lesson. That's it.")]),
+    dict(opp="cruz", act=1, bout="MAIN EVENT   -   8 ROUNDS", rival=True,
+         pre=[("doc", "They offered us Sugar Cruz. Seventeen and oh. Promoter's golden boy."),
+              ("doc", "They want a name on his record. They picked you."),
+              ("you", "Then they picked wrong."),
+              ("doc", "...You know what? Say that again in the ring.")],
+         won=[("doc", "You just took an unbeaten man's 0. Do you understand what you did?"),
+              ("you", "I think I'm going to be sick."),
+              ("doc", "Be sick in the car. There's six promoters outside and they ALL want you now.")],
+         lost=[("doc", "He was better tonight. That's all that was."),
+               ("you", "He didn't even look tired, Doc."),
+               ("doc", "He will. Guys like that burn bright. We'll see him again - and we'll be ready.")]),
+    dict(opp="bulldozer", act=2, bout="RANKED BOUT   -   8 ROUNDS",
+         pre=[("doc", "Welcome to the rankings, kid. They start you with the Bulldozer."),
+              ("doc", "He throws everything for six minutes and then he's a statue."),
+              ("you", "So I survive six minutes."),
+              ("doc", "You survive six minutes and then you go hunting.")],
+         won=[("doc", "He emptied the tank and you were still breathing. That's conditioning."),
+              ("you", "That's three months of running, is what that is."),
+              ("doc", "Keep running.")],
+         lost=[("doc", "He caught you early and you never got your legs back."),
+               ("you", "I couldn't BREATHE, Doc."),
+               ("doc", "Then we fix the engine. Wind beats power - every single time.")]),
+    dict(opp="razor", act=2, bout="RANKED BOUT   -   10 ROUNDS",
+         pre=[("doc", "Kenji Watanabe. Razor. He doesn't lead - he answers."),
+              ("doc", "Whatever you throw, he throws it back sharper and a half-beat later."),
+              ("you", "So I make him lead."),
+              ("doc", "Feints, kid. Make him answer a question you never asked.")],
+         won=[("doc", "He spent ten rounds waiting for a punch you never threw."),
+              ("you", "I've never been that patient in my life."),
+              ("doc", "Patience is the last thing a fighter learns. You're ahead of schedule.")],
+         lost=[("doc", "Every time you led, he was already there."),
+               ("you", "I walked onto every single one."),
+               ("doc", "So stop walking. Next time you make HIM move first.")]),
+    dict(opp="lee", act=2, bout="RANKED BOUT   -   10 ROUNDS",
+         pre=[("doc", "Lightning Lee. Fastest hands in the division and he knows it."),
+              ("you", "Can I outrun him?"),
+              ("doc", "No. Nobody can. So cut the ring off and make him fight in a phone booth.")],
+         won=[("doc", "You took away the ring and he had nowhere to be fast."),
+              ("you", "He was still a blur. I just knew where the blur had to go."),
+              ("doc", "Ring generalship. Write that down.")],
+         lost=[("doc", "You chased him for ten rounds and caught air."),
+               ("you", "He was never where I threw."),
+               ("doc", "Because you chased. Next time you CUT. There's a difference.")]),
+    dict(opp="preacher", act=2, bout="RANKED BOUT   -   10 ROUNDS",
+         pre=[("doc", "Eli Boone. We came up together. He's forty-one and he's still here."),
+              ("you", "You don't sound happy about this one."),
+              ("doc", "He's the best man I ever knew in a ring. And he never got a title shot."),
+              ("doc", "Beat him. He'd be insulted by anything less.")],
+         won=[("doc", "He hugged you at the end. You know he's never done that?"),
+              ("you", "He told me to go get the thing he never got."),
+              ("doc", "...Yeah. That's Eli.")],
+         lost=[("doc", "Forty-one years old and he schooled you. Don't you dare be ashamed."),
+               ("you", "He knew everything I was going to do."),
+               ("doc", "He's known it for twenty years. Go learn some of it.")]),
+    dict(opp="sal", act=2, bout="ELIMINATOR   -   10 ROUNDS",
+         pre=[("doc", "Big Sal Marconi. The gatekeeper. Nobody gets a title shot without going through him."),
+              ("doc", "Five men have tried this year. Five men went home."),
+              ("you", "Then it's time somebody paid the toll."),
+              ("doc", "He's bigger, he's stronger, and he fades. Body. All night. Body.")],
+         won=[("doc", "You put eighty punches into that man's ribs and he just... folded."),
+              ("you", "I couldn't feel my hands by the sixth."),
+              ("doc", "Doesn't matter. The gate's open, kid. We're in the top five.")],
+         lost=[("doc", "He leaned on you for ten rounds and you let him."),
+               ("you", "He was so HEAVY."),
+               ("doc", "They all are. You go to the body until heavy men get light.")]),
+    dict(opp="volkov", act=3, bout="FINAL ELIMINATOR   -   12 ROUNDS",
+         pre=[("doc", "This is it. Winner fights for the title. Loser goes back to the queue."),
+              ("doc", "Volkov. Twenty-nine and one. Cold as the day is long."),
+              ("you", "Doc... I've been doing this for four years for exactly tonight."),
+              ("doc", "Then quit talking and go be the man who deserves it.")],
+         won=[("doc", "Twelve rounds. TWELVE. And you were the one still walking forward."),
+              ("you", "Say it, Doc."),
+              ("doc", "You're fighting for the lightweight championship of the world, kid.")],
+         lost=[("doc", "Twelve rounds and three points. Three."),
+               ("you", "I was RIGHT THERE."),
+               ("doc", "You were. And that's why they'll give us another one. Breathe. We go again.")]),
+    dict(opp="cruz2", act=3, bout="TITLE ELIMINATOR   -   12 ROUNDS", rival=True,
+         pre=[("doc", "Guess who the sanctioning body put in front of us. One last time."),
+              ("you", "Sugar."),
+              ("doc", "Twenty-four and one. And the one still eats at him every night."),
+              ("doc", "He's not a golden boy any more, kid. He's dangerous now.")],
+         won=[("doc", "He shook your hand and told you to go take the belt. He MEANT it."),
+              ("you", "Four years ago he wouldn't look at me in a weigh-in."),
+              ("doc", "Four years ago you were nobody. Look at you now.")],
+         lost=[("doc", "He wanted it more tonight. That's an ugly sentence and it's the true one."),
+               ("you", "I'm running out of road, Doc."),
+               ("doc", "Then stop wasting it. Gym. Tomorrow. Six AM.")]),
+    dict(opp="reyes", act=3, bout="FOR THE WORLD TITLE   -   12 ROUNDS", title_fight=True,
+         pre=[("doc", "Forty fights. Forty knockouts. Victor Reyes has never heard a final bell."),
+              ("doc", "Kid... whatever happens after tonight, I want you to know something."),
+              ("you", "Doc, don't do a speech."),
+              ("doc", "I waited thirty years for a fighter like you. Go on. Go get it.")],
+         won=[], lost=[]),
 ]
+
+REBUILDS = ("joe", "rios")      # the fights you take to climb back after a loss
+MAX_LOSSES = 3                  # three on the record and the commission pulls your licence
+
+# ============================================================ the scenes that aren't fights
+SCENES = dict(
+    open=[("doc", "IRON JAW GYM. 5:40 AM. Same as every morning for four years."),
+          ("doc", "You've beaten every sparring partner I can find in this city."),
+          ("doc", "So either you turn pro tonight, or you stay here and get old hitting a bag."),
+          ("you", "...Where do I sign?")],
+    setback=[("doc", "Sit down. Ice on that. Listen to me."),
+             ("doc", "You're not the first good fighter to get beat and you won't be the last."),
+             ("doc", "But a loss on the record means we go the long way round now."),
+             ("doc", "Tune-up fight. Look sharp. Remind people who you are.")],
+    rebuilt=[("doc", "That's the one. Looked like you again out there."),
+             ("you", "Can we get the big one back?"),
+             ("doc", "Already made the call. They're giving you the rematch.")],
+    last_chance=[("doc", "Two losses, kid. Two."),
+                 ("doc", "One more and the commission pulls your licence for the year."),
+                 ("you", "Then I don't lose again."),
+                 ("doc", "No. You don't.")],
+    title_lost=[("doc", "Nobody has ever taken Victor Reyes past the eighth. Nobody."),
+                ("you", "I didn't come for a moral victory, Doc."),
+                ("doc", "I know. But the whole world just watched you go in there and MAKE him work."),
+                ("doc", "They want it again. Rematch. Six months. Go earn it properly this time.")],
+)
+
+# ============================================================ endings
+RETIRE_SCENE = [("doc", "Commission pulled the licence this morning. Twelve months minimum."),
+                ("you", "Twelve months."),
+                ("doc", "You had it, kid. On your night, you had it as much as any of them."),
+                ("doc", "Come work the corner with me. Teach some other punk what it cost you."),
+                ("you", "...Yeah. Yeah, okay, Doc."),
+                ("doc", "Lights off when you leave. You know where the key goes.")]
+
+# Dialogue on the boat. The first list is for an unbeaten run, the second for a road with losses on it.
+YACHT_CLEAN = [("doc", "Forty-one fights I worked corners. Never once been on a boat."),
+               ("you", "You've never even been in the ocean, Doc."),
+               ("doc", "I've been in the ocean. There was a bucket of ice involved and you were bleeding."),
+               ("you", "Fair."),
+               ("doc", "Not one loss. You went through that entire division and not ONE man beat you."),
+               ("you", "Somebody would have, eventually. Everybody gets got."),
+               ("doc", "Maybe. But not yet, champ."),
+               ("you", "...Hey, Doc?"),
+               ("doc", "Mm."),
+               ("you", "Thanks for the 5:40s."),
+               ("doc", "Thanks for showing up to 'em.")]
+YACHT_ROAD = [("doc", "You know what I keep thinking about? Not the belt."),
+              ("you", "No?"),
+              ("doc", "The night you lost and you were sat on that bench and you couldn't look at me."),
+              ("you", "I remember the bench."),
+              ("doc", "Everybody remembers the wins, kid. I remember you coming back in at 5:40 the next morning."),
+              ("you", "Where else was I gonna go?"),
+              ("doc", "A thousand guys would've gone anywhere else. That's the whole story. That right there."),
+              ("you", "...Pass me the sunglasses."),
+              ("doc", "Get 'em yourself, champ. I'm retired.")]
+
 LOSE_LINES = ["Dang it... I'll get 'em next time!", "Ugh. Back to the heavy bag...",
               "That one's on me. Run it back!"]
 TAUNTS = {   # frame sequence, ms per frame
@@ -1239,6 +1558,317 @@ class Referee:
         c.blit(img, (int(self.x) - 22, GROUND - 65))
 
 
+# ============================================================ story scenes
+PORTRAIT_W, PORTRAIT_H = 30, 28
+PORTRAIT_FRAME = 47          # the one frame where the gloves are down and you can see his face
+SAVE_NAME = ".boxer_career.json"
+
+
+def save_path():
+    for base in (os.path.expanduser("~"), os.path.dirname(os.path.abspath(__file__)), tempfile.gettempdir()):
+        try:
+            if os.path.isdir(base) and os.access(base, os.W_OK):
+                return os.path.join(base, SAVE_NAME)
+        except OSError:
+            continue
+    return os.path.join(tempfile.gettempdir(), SAVE_NAME)
+
+
+def load_career():
+    """The saved career, or None. A broken save is simply ignored."""
+    try:
+        with open(save_path()) as fh:
+            d = json.load(fh)
+        return d if isinstance(d, dict) and "idx" in d else None
+    except (OSError, ValueError):
+        return None
+
+
+def save_career(data):
+    try:
+        with open(save_path(), "w") as fh:
+            json.dump(data, fh)
+        return True
+    except OSError:
+        return False
+
+
+def clear_career():
+    try:
+        os.remove(save_path())
+    except OSError:
+        pass
+
+
+class Scene:
+    """A between-fights conversation: portrait, name, and typed-out dialogue."""
+    CPS = 42
+    CARD = pygame.Rect(10, 104, VW - 20, 52)
+    CARD_TOP = pygame.Rect(10, 6, VW - 20, 46)
+
+    def __init__(self, game, lines, top=False):
+        self.game = game
+        self.CARD = self.CARD_TOP if top else Scene.CARD
+        self.lines = [l for l in lines if l]
+        self.i = 0
+        self.t = 0.0
+        self.last = 0
+        self.wrapped = self.wrap(0)
+
+    def wrap(self, i):
+        if i >= len(self.lines):
+            return []
+        return wrap(self.game.font_s, self.lines[i][1], self.CARD.w - PORTRAIT_W - 22)
+
+    def who(self):
+        return self.lines[self.i][0] if self.i < len(self.lines) else "doc"
+
+    def text(self):
+        return self.lines[self.i][1] if self.i < len(self.lines) else ""
+
+    def shown(self):
+        return min(len(self.text()), int(self.t * self.CPS))
+
+    def typed(self):
+        return self.shown() >= len(self.text())
+
+    def done(self):
+        return self.i >= len(self.lines)
+
+    def advance(self):
+        """Enter: finish typing this line, or move to the next one."""
+        if not self.typed():
+            self.t = len(self.text()) / self.CPS
+            return
+        self.i += 1
+        self.t = 0.0
+        self.last = 0
+        self.wrapped = self.wrap(self.i)
+
+    def update(self, dt):
+        if self.done():
+            return
+        self.t += dt
+        n = self.shown()
+        if n // 3 > self.last // 3 and n < len(self.text()):
+            self.game.snd("blip")
+        self.last = n
+
+    def draw(self, c):
+        if self.done():
+            return
+        g = self.game
+        who = self.who()
+        spk = FIGHTERS.get(who, FIGHTERS["doc"])
+        r = self.CARD
+        plate = pygame.Surface(r.size, pygame.SRCALPHA)
+        plate.fill((12, 10, 24, 238))
+        c.blit(plate, r.topleft)
+        pygame.draw.rect(c, (92, 80, 120), r, 1)
+        c.fill(spk["color"], (r.x + 1, r.y, r.w - 2, 1))
+        c.blit(g.portrait(who), (r.x + 5, r.y + 5))
+        tx = r.x + 10 + PORTRAIT_W
+        draw_text(c, self.font_name(), spk["name"], tx, r.y + 5, spk["color"])
+        for k, line in enumerate(self.wrapped):
+            left = self.shown() - sum(len(x) + 1 for x in self.wrapped[:k])
+            if left <= 0:
+                break
+            c.blit(g.font_s.render(line[:left], False, (232, 236, 250)), (tx, r.y + 18 + k * 10))
+        if self.typed() and int(g.clock * 3) % 2 == 0:
+            draw_text(c, g.font_s, "ENTER", r.right - 8, r.bottom - 11, (255, 214, 90), right=True)
+
+    def font_name(self):
+        return self.game.font_s
+
+
+# ============================================================ the yacht (the good ending)
+SEA_Y = 88                   # horizon
+DECK_Y = 120                 # where the deck starts
+SKY = ((24, 20, 54), (86, 46, 94), (198, 94, 96), (248, 160, 92), (255, 214, 130))
+
+
+def make_yacht_sky():
+    s = pygame.Surface((VW, VH))
+    for y in range(SEA_Y + 2):
+        u = y / float(SEA_Y + 2)
+        k = u * (len(SKY) - 1)
+        i = min(len(SKY) - 2, int(k))
+        s.fill(_mix(SKY[i], SKY[i + 1], k - i), (0, y, VW, 1))
+    sun_y = SEA_Y - 13
+    for r in range(26, 0, -1):                                  # haze around the sun
+        a = int(5 + 40 * (1 - r / 26.0))
+        glow = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (255, 210, 140, a), (r, r), r)
+        s.blit(glow, (VW // 2 + 54 - r, sun_y - r), special_flags=pygame.BLEND_RGBA_ADD)
+    pygame.draw.circle(s, (255, 236, 176), (VW // 2 + 54, sun_y), 11)
+    pygame.draw.circle(s, (255, 250, 220), (VW // 2 + 54, sun_y), 8)
+    rnd = random.Random(21)
+    for _ in range(14):                                          # long flat clouds
+        cx, cy = rnd.uniform(0, VW), rnd.uniform(12, SEA_Y - 20)
+        w, h = rnd.uniform(18, 54), rnd.uniform(2, 4)
+        col = _mix((255, 196, 150), (120, 70, 110), (cy - 12) / 60.0)
+        pygame.draw.ellipse(s, col, (cx, cy, w, h))
+        pygame.draw.ellipse(s, lighten(col, 0.25), (cx + 3, cy, w * 0.6, max(1, h - 1)))
+    for i, (x, w, h) in enumerate(((22, 46, 9), (250, 60, 12))):   # islands on the horizon
+        pts = [(x, SEA_Y), (x + w * 0.3, SEA_Y - h), (x + w * 0.55, SEA_Y - h * 0.6),
+               (x + w * 0.75, SEA_Y - h * 1.1), (x + w, SEA_Y)]
+        pygame.draw.polygon(s, (74, 52, 86), pts)
+    return s
+
+
+def make_deck():
+    """The foredeck of the boat: planks, rail, and the shadow under the awning."""
+    s = pygame.Surface((VW, VH - DECK_Y), pygame.SRCALPHA)
+    h = s.get_height()
+    for y in range(h):
+        u = y / float(h)
+        s.fill(_mix((214, 182, 136), (154, 118, 80), u), (0, y, VW, 1))
+    for x in range(-8, VW, 17):                                  # planking
+        off = int((x // 17) % 2)
+        s.fill((126, 94, 62), (x + off, 0, 1, h))
+    for y in range(3, h, 9):
+        s.fill((178, 146, 104), (0, y, VW, 1))
+    s.fill((248, 246, 240), (0, 0, VW, 2))                       # the gunwale cap
+    s.fill((176, 172, 166), (0, 2, VW, 1))
+    return s
+
+
+class Yacht:
+    """The last scene: champion, trainer, open water, nothing left to prove."""
+
+    def __init__(self, game):
+        self.game = game
+        self.sky = make_yacht_sky()
+        self.deck = make_deck()
+        self.t = 0.0
+        self.gulls = [[random.uniform(0, VW), random.uniform(20, 56), random.uniform(7, 16), random.uniform(0, 6.3)]
+                      for _ in range(5)]
+        self.glints = []
+
+    def reset(self):
+        self.t = 0.0
+        self.glints = []
+
+    def update(self, dt):
+        self.t += dt
+        for g in self.gulls:
+            g[0] += g[2] * dt
+            if g[0] > VW + 10:
+                g[0] = -10
+                g[1] = random.uniform(20, 56)
+            g[3] += dt * 5
+        if random.random() < dt * 22:
+            self.glints.append([random.uniform(0, VW), random.uniform(SEA_Y + 2, DECK_Y - 2), 0.0,
+                                random.uniform(0.4, 0.9)])
+        for s in self.glints:
+            s[2] += dt
+        self.glints = [s for s in self.glints if s[2] < s[3]]
+
+    def draw(self, c):
+        t = self.t
+        c.blit(self.sky, (0, 0))
+        # --- the sea: bands of moving water, brightest under the sun
+        for y in range(SEA_Y, DECK_Y):
+            u = (y - SEA_Y) / float(DECK_Y - SEA_Y)
+            base = _mix((52, 58, 120), (28, 32, 78), u)
+            c.fill(base, (0, y, VW, 1))
+        for y in range(SEA_Y, DECK_Y, 2):
+            u = (y - SEA_Y) / float(DECK_Y - SEA_Y)
+            amp = 3 + 16 * u
+            ph = t * (0.7 + u * 1.5) + y * 0.7
+            x = int(VW // 2 + 54 + math.sin(ph) * amp)
+            w = int(10 + 44 * u)
+            col = _mix((255, 196, 140), (226, 128, 110), u)
+            c.fill(col, (x - w // 2, y, w, 1))
+            c.fill(_mix(col, (255, 255, 255), 0.4), (x - w // 6, y, max(1, w // 3), 1))
+        for x, y, el, life in self.glints:
+            k = 1 - el / life
+            c.fill((255, 240, 210) if k > 0.5 else (210, 200, 230), (int(x), int(y), 2, 1))
+        for gx, gy, _, ph in self.gulls:                          # distant birds
+            flap = math.sin(ph) * 2
+            x, y = int(gx), int(gy)
+            pygame.draw.line(c, (40, 36, 60), (x - 3, y + flap), (x, y))
+            pygame.draw.line(c, (40, 36, 60), (x, y), (x + 3, y + flap))
+        c.blit(self.deck, (0, DECK_Y))
+        self.draw_rail(c)
+        self.draw_furniture(c)
+
+    def draw_rail(self, c):
+        y = DECK_Y - 22
+        for x in range(10, VW, 36):                               # stanchions
+            c.fill((40, 38, 50), (x, y, 3, 24))
+            c.fill((214, 216, 226), (x, y, 2, 24))
+            c.fill((255, 255, 255), (x, y, 1, 24))
+        for yy, th in ((y, 2), (y + 9, 1)):                       # top rail and the wire below it
+            c.fill((40, 38, 50), (0, yy + th, VW, 1))
+            c.fill((226, 228, 238), (0, yy, VW, th))
+
+    def draw_furniture(self, c):
+        g = self.game
+        deck = DECK_Y + 28                                   # the line the feet stand on
+        # --- you, out on the planks with the belt round your waist
+        frames = g.frames
+        fr = IDLE_SEQ[int(self.t * 3.4) % len(IDLE_SEQ)]
+        sx = 74
+        sy = deck - SPRITE_FEET
+        c.blit(g.shadow, (sx - 24, deck - 6))
+        c.blit(frames[fr], (sx - HIP_X, sy))
+        c.blit(g.belt, (sx - HIP_X + 21, sy + 41 + int(math.sin(self.t * 1.3))))
+        # --- a little table with two cold ones between you
+        tx, ty = 138, deck - 20
+        c.fill((30, 26, 38), (tx - 1, ty + 7, 30, 15))
+        c.fill((236, 232, 224), (tx, ty + 6, 28, 4))
+        c.fill((186, 180, 172), (tx + 11, ty + 10, 6, 12))
+        c.fill((30, 26, 38), (tx + 9, ty + 21, 10, 2))
+        for i, dx in enumerate((4, 20)):
+            c.fill((30, 26, 38), (tx + dx - 1, ty - 2, 6, 10))
+            c.fill((255, 226, 140) if i == 0 else (190, 232, 255), (tx + dx, ty - 1, 4, 8))
+            c.fill((255, 255, 255), (tx + dx, ty - 1, 4, 1))
+            c.fill((255, 120, 140), (tx + dx + 2, ty - 3, 2, 2))
+        # --- Doc, flat out in a lounger, finally off his feet
+        self.draw_doc(c, 196, deck - 24)
+
+    def draw_doc(self, c, x, y):
+        """A lounger with the old man in it, straw hat tipped down over the eyes."""
+        ol, canvas, canvas_s = (34, 28, 44), (84, 142, 206), (56, 102, 156)
+        shirt, flower1, flower2 = (250, 242, 206), (236, 120, 110), (132, 198, 148)
+        skin, skin_s, hair = (176, 124, 86), (138, 94, 64), (228, 228, 234)
+        pygame.draw.polygon(c, ol, [(x - 3, y + 34), (x + 20, y + 4), (x + 28, y + 10), (x + 7, y + 37)])
+        pygame.draw.polygon(c, canvas, [(x, y + 33), (x + 20, y + 7), (x + 25, y + 11), (x + 6, y + 35)])
+        pygame.draw.polygon(c, canvas_s, [(x + 2, y + 34), (x + 22, y + 9), (x + 25, y + 11), (x + 6, y + 35)])
+        c.fill(ol, (x + 5, y + 32, 52, 8))
+        c.fill(canvas, (x + 6, y + 33, 50, 6))
+        c.fill(canvas_s, (x + 6, y + 37, 50, 2))
+        for lx in (x + 10, x + 50):
+            c.fill(ol, (lx, y + 39, 4, 9))
+            c.fill((70, 66, 84), (lx + 1, y + 39, 2, 9))
+        c.fill(ol, (x + 11, y + 15, 21, 20))                  # reclined torso
+        c.fill(shirt, (x + 12, y + 16, 19, 18))
+        for row, col in ((y + 18, flower1), (y + 23, flower2), (y + 28, flower1)):
+            for sx2 in range(x + 13, x + 30, 5):
+                c.fill(col, (sx2, row, 2, 2))
+        c.fill(ol, (x + 29, y + 30, 28, 9))                   # legs along the seat
+        c.fill((68, 88, 148), (x + 29, y + 31, 26, 7))
+        c.fill((52, 68, 120), (x + 29, y + 36, 26, 2))
+        c.fill(ol, (x + 53, y + 29, 9, 9))                    # white sneakers, always
+        c.fill((238, 234, 228), (x + 54, y + 30, 7, 7))
+        c.fill((186, 182, 176), (x + 54, y + 35, 7, 2))
+        c.fill(ol, (x + 7, y + 24, 7, 11))                    # near arm hanging off the side
+        c.fill(shirt, (x + 8, y + 25, 5, 6))
+        c.fill(skin, (x + 8, y + 31, 5, 4))
+        pygame.draw.circle(c, ol, (x + 13, y + 10), 8)        # head
+        pygame.draw.circle(c, skin, (x + 13, y + 10), 7)
+        c.fill(skin_s, (x + 8, y + 11, 3, 4))
+        c.fill(hair, (x + 7, y + 5, 12, 3))
+        c.fill(skin_s, (x + 15, y + 14, 4, 1))                # the line of a mouth
+        c.fill(ol, (x + 2, y + 1, 23, 5))                     # straw hat, pulled down
+        c.fill((242, 230, 192), (x + 3, y + 2, 21, 3))
+        c.fill((214, 194, 152), (x + 3, y + 4, 21, 1))
+        c.fill((196, 90, 90), (x + 5, y + 2, 17, 1))
+        c.fill((30, 26, 38), (x + 14, y + 9, 6, 3))           # sunglasses
+        c.fill((90, 150, 210), (x + 15, y + 9, 2, 1))
+
+
 # ============================================================ the info button
 INFO_CENTER = (15, VH - 13)      # the little "i" in the bottom-left corner
 INFO_D, INFO_D_HOVER = 17, 21    # its size normally / under the pointer
@@ -1247,7 +1877,7 @@ MOVE_ROWS = (("ARROWS", "MOVE"), ("A", "JAB"), ("S", "CROSS"), ("D", "BODY JAB")
              ("W", "SLIP"), ("E HOLD", "HIGH BLOCK"), ("R HOLD", "LOW BLOCK"), ("SHIFT+A..F", "FEINT"),
              ("Q", "CLINCH"))
 FIGHT_TIPS = ("Slip then punch = COUNTER", "Block late = PARRY", "Flurries break a guard",
-              "Body shots cut healing", "Feint him, then land big", "Empty WIND = GASSED",
+              "Body shots cut healing", "Feint him, then land big", "Guard up = wind back",
               "On the ropes = hurt more", "3 knockdowns = T.K.O.", "Mash A S D F to get up")
 
 
@@ -1325,6 +1955,7 @@ class Fighter:
         self.game = game
         self.frames = frames
         self.facing = facing           # +1 faces right, -1 faces left
+        self.pro_regen = False         # True for YOU: blocking and footwork give wind back
         self.configure()
         self.reset(72)
 
@@ -1571,13 +2202,18 @@ class Fighter:
         self.stam_t += dt
         if self.stam_t >= STAM_REGEN_DELAY and not (self.down or self.out_cold):
             rate = STAM_REGEN * self.wind
-            if not self.block and not self.moving and not self.action:
+            if self.block:
+                rate *= STAM_GUARD_REGEN if self.pro_regen else 1.0
+            elif self.moving:
+                rate *= STAM_MOVE_REGEN if self.pro_regen else 1.0
+            elif not self.action:
                 rate *= STAM_REGEN_IDLE
             self.stam = min(float(STAM_MAX), self.stam + rate * dt)
-        if self.block:
-            self.spend(STAM_HOLD * dt)
-        elif self.moving:
-            self.spend(STAM_MOVE * dt)
+        if not self.pro_regen:                     # the computer still burns wind holding on
+            if self.block:
+                self.spend(STAM_HOLD * dt)
+            elif self.moving:
+                self.spend(STAM_MOVE * dt)
         self.gassed = self.stam < GAS_LINE
         if self.gassed and not (self.down or self.out_cold or self.ko):
             self.puff_t -= dt
@@ -2061,8 +2697,10 @@ class Game:
     def __init__(self, sounds=True):
         strip = load_strip(STRIP_B64)
         frames = split(strip)
+        self.strip = strip
         self.spar_frames = split(recolor(strip, look_palette(**SPAR_LOOK)), flip=True)
-        self.campaign_frames = [split(recolor(strip, look_palette(**o["look"])), flip=True) for o in CAMPAIGN]
+        self.frames = frames
+        self._fset, self._port = {}, {}
         self.belt = make_belt()
         self.belt_small = pygame.transform.scale(self.belt, (18, 7))
         self._tops = {}
@@ -2131,14 +2769,29 @@ class Game:
                 self.crowd_ch = None
 
         self.player = Fighter(self, frames, 1)
+        self.player.pro_regen = True
         self.player.configure(chin=PLAYER_CHIN)
         self.player.reset(72)
         self.cpu = Fighter(self, self.spar_frames, -1)
         self.ai = AI(self, self.cpu, self.player)
         self.clock = 0.0
         self.mode = "bag"
-        self.stage = 0
-        self.opp = CAMPAIGN[0]
+        self.idx, self.wins, self.losses, self.kos = 0, 0, 0, 0
+        self.flags = set()
+        self.rebuild = None
+        self.scene = None
+        self.scene_after = (None, None)
+        self.ending = None
+        self.save_data = None
+        self.saved_t = 0.0
+        self.menu_i = 0
+        self.yacht = None
+        self.card_t = 0.0
+        self.round_time = float(ROUND_TIME)
+        self.result = None
+        self.end_reason = None
+        self.opp = FIGHTERS["rusty"]
+        self.opp_key = "rusty"
         self.bubble = None
         self.confetti = []
         self.phase, self.phase_t = "intro", 0.0
@@ -2233,16 +2886,120 @@ class Game:
         self.clear_fx()
         self.snd("bell")
 
-    # ------------------------------------------------------------ campaign
-    def start_campaign(self):
-        self.mode = "campaign"
-        self.stage = 0
-        self.begin_stage()
+    # ------------------------------------------------------------ career
+    def fighter_frames(self, key):
+        """Sprite set for one fighter, recoloured on first use and kept."""
+        if key not in self._fset:
+            look = FIGHTERS[key].get("look")
+            base = self.strip if look is None else recolor(self.strip, look_palette(**look))
+            self._fset[key] = split(base, flip=True)
+        return self._fset[key]
 
-    def begin_stage(self):
-        o = self.opp = CAMPAIGN[self.stage]
+    def portrait(self, key):
+        """A head-and-shoulders crop of a fighter, for the story cards."""
+        if key not in self._port:
+            frames = self.frames if key == "you" else self.fighter_frames(key)
+            f = frames[PORTRAIT_FRAME]
+            top, cx = self.frame_top(frames, PORTRAIT_FRAME)
+            if key == "you":
+                cx = FW - 1 - cx                        # your sprite faces the other way
+                f = pygame.transform.flip(f, True, False)
+            box = pygame.Surface((PORTRAIT_W, PORTRAIT_H), pygame.SRCALPHA)
+            box.fill((18, 16, 32))
+            box.blit(f, (PORTRAIT_W // 2 - cx, 3 - top), (0, 0, FW, FH))
+            pygame.draw.rect(box, (92, 80, 120), (0, 0, PORTRAIT_W, PORTRAIT_H), 1)
+            self._port[key] = box
+        return self._port[key]
+
+    def career_reset(self, keep_record=False):
+        if not keep_record:
+            self.idx, self.wins, self.losses = 0, 0, 0
+            self.flags = set()
+            self.kos = 0
+        self.rebuild = None
+        self.scene = None
+        self.ending = None
+
+    def start_campaign(self):
+        """Opens the career. If there is a save on disk, ask first."""
+        self.mode = "campaign"
+        self.career_reset()
+        data = load_career()
+        if data:
+            self.save_data = data
+            self.phase, self.phase_t = "menu", 0.0
+            self.menu_i = 0
+            self.clear_fx()
+            self.bubble = None
+            return
+        self.new_career()
+
+    def new_career(self):
+        self.mode = "campaign"
+        self.career_reset()
+        self.play_scene(SCENES["open"], "first_fight")
+
+    def continue_career(self):
+        d = self.save_data or {}
+        self.mode = "campaign"
+        self.career_reset()
+        self.idx = clamp(int(d.get("idx", 0)), 0, len(CAREER) - 1)
+        self.wins = int(d.get("wins", 0))
+        self.losses = int(d.get("losses", 0))
+        self.kos = int(d.get("kos", 0))
+        self.flags = set(d.get("flags", []))
+        self.rebuild = d.get("rebuild") or None
+        if self.rebuild not in FIGHTERS:
+            self.rebuild = None
+        self.begin_fight()
+
+    def save_career(self):
+        ok = save_career(dict(idx=self.idx, wins=self.wins, losses=self.losses, kos=self.kos,
+                              flags=sorted(self.flags), rebuild=self.rebuild))
+        self.saved_t = 2.2 if ok else -2.2
+        self.snd("bell" if ok else "block")
+        return ok
+
+    def record(self):
+        return "%d-%d" % (self.wins, self.losses)
+
+    def bout(self):
+        return CAREER[self.idx]
+
+    # ------------------------------------------------------------ scenes
+    def play_scene(self, lines, after, arg=None):
+        self.scene = Scene(self, lines)
+        self.scene_after = (after, arg)
+        self.phase, self.phase_t = "scene", 0.0
+        self.bubble = None
+        self.clear_fx()
+        self.player.reset(96)
+        self.cpu.reset(372)
+
+    def scene_done(self):
+        what, arg = self.scene_after
+        self.scene = None
+        if what == "first_fight":
+            self.begin_fight()
+        elif what == "next_fight":
+            self.begin_fight()
+        elif what == "setback":
+            self.rebuild = REBUILDS[min(self.losses - 1, len(REBUILDS) - 1)]
+            if self.losses == MAX_LOSSES - 1:
+                self.play_scene(SCENES["last_chance"], "next_fight")
+            else:
+                self.begin_fight()
+        elif what == "yacht":
+            self.start_yacht()
+        else:
+            self.begin_fight()
+
+    def begin_fight(self):
+        key = self.rebuild or CAREER[self.idx]["opp"]
+        o = self.opp = dict(FIGHTERS[key])
+        self.opp_key = key
         p, c = self.player, self.cpu
-        c.frames = self.campaign_frames[self.stage]
+        c.frames = self.fighter_frames(key)
         c.configure(o["hp"], o["power"], o["speed"], o["walk"], o.get("chin", 1.0), o.get("heart", 1.0),
                     o.get("wind", 1.0))
         p.reset(96)
@@ -2253,7 +3010,9 @@ class Game:
         self.round_time = float(ROUND_TIME)
         self.result = None
         self.end_reason = None
+        self.method = None
         self.bubble = None
+        self.scene = None
         self.confetti = []
         self.step = 0
         self.taunt_i = -1
@@ -2261,6 +3020,111 @@ class Game:
         self.fw_t = 0.0
         self.best = 0
         self.clear_fx()
+
+    def after_fight(self):
+        """A fight just finished: bank it, then line up whatever the story does next."""
+        p, c = self.player, self.cpu
+        self.phase_t, self.step = 0.0, 0
+        self.bubble = None
+        self.ref.leave()
+        won = self.result == "YOU WIN!"
+        if won:
+            self.wins += 1
+            if self.method in ("KO", "OUT COLD", "TKO", "STOPPAGE"):
+                self.kos += 1
+            if not self.rebuild:
+                self.flags.add("beat_" + self.opp_key)
+            if not self.rebuild and self.bout().get("title_fight"):
+                self.phase = "champion"
+                p.won, p.end_t = True, max(p.end_t, 0.0)
+                self.confetti = []
+                self.flags.add("champion")
+                self.save_career()
+                self.snd("fanfare")
+                self.snd("roar")
+                return
+            self.phase = "victory"
+            self.bubble = Bubble(self, c, self.opp["lose"], min_top=88)
+        else:
+            self.losses += 1
+            self.phase = "defeat"
+            if not c.won:
+                c.won, c.end_t = True, 0.0
+            if not p.ko:
+                p.ko, p.end_t = True, 0.6
+            self.snd("sad")
+
+    def after_result(self):
+        """Pressing on past the victory / defeat screen puts the story in motion."""
+        if self.result == "YOU WIN!":
+            if self.rebuild:
+                self.rebuild = None
+                self.play_scene(SCENES["rebuilt"], "next_fight")
+            else:
+                lines = list(self.bout().get("won", ()))
+                self.idx = min(self.idx + 1, len(CAREER) - 1)
+                nxt = CAREER[self.idx]
+                self.play_scene(lines + list(nxt.get("pre", ())), "next_fight")
+        else:
+            if self.losses >= MAX_LOSSES:
+                self.start_retire()
+            elif self.rebuild:
+                self.rebuild = REBUILDS[min(self.losses - 1, len(REBUILDS) - 1)]
+                self.play_scene(SCENES["setback"], "next_fight")
+            elif self.bout().get("title_fight"):
+                self.play_scene(SCENES["title_lost"], "next_fight")
+            else:
+                lines = list(self.bout().get("lost", ())) + list(SCENES["setback"])
+                self.play_scene(lines, "setback")
+
+    def start_retire(self):
+        self.ending = "retire"
+        self.scene = Scene(self, RETIRE_SCENE)
+        self.scene_after = (None, None)
+        self.phase, self.phase_t = "retire", 0.0
+        self.card_t = 0.0
+        self.bubble = None
+        self.clear_fx()
+        self.snd("sad")
+
+    def start_yacht(self):
+        self.ending = "champion"
+        self.yacht = self.yacht or Yacht(self)
+        self.yacht.reset()
+        self.scene = Scene(self, YACHT_CLEAN if self.losses == 0 else YACHT_ROAD, top=True)
+        self.scene_after = (None, None)
+        self.phase, self.phase_t = "yacht", 0.0
+        self.card_t = 0.0
+        self.bubble = None
+        self.clear_fx()
+        self.snd("fanfare")
+
+    def save_and_quit(self):
+        """Bank the career where it stands and step out to the gym."""
+        if self.save_career():
+            self.reset_bag()
+            self.saved_t = 2.2
+
+    def menu_pick(self):
+        if self.menu_i == 0 and self.save_data:
+            self.continue_career()
+        else:
+            clear_career()
+            self.new_career()
+
+    def menu_move(self, d):
+        if self.phase == "menu":
+            self.menu_i = (self.menu_i + d) % 2
+            self.snd("blip")
+
+    def next_label(self):
+        """What the victory screen says is coming up."""
+        if self.rebuild:
+            return "BACK TO: " + FIGHTERS[CAREER[self.idx]["opp"]]["short"]
+        if self.bout().get("title_fight"):
+            return "THE TITLE"
+        nxt = CAREER[min(self.idx + 1, len(CAREER) - 1)]
+        return "NEXT UP: " + FIGHTERS[nxt["opp"]]["short"]
 
     def taunt_frame(self, kind, t):
         seq, ms = TAUNTS[kind]
@@ -2277,6 +3141,17 @@ class Game:
                 self.after_fight()
             return
         self.phase_t += dt
+        self.saved_t -= dt if self.saved_t > 0 else -dt if self.saved_t < 0 else 0
+        if self.phase in ("scene", "menu", "retire", "yacht"):
+            if self.scene:
+                self.scene.update(dt)
+                if self.scene.done() and self.phase == "scene":
+                    self.scene_done()
+            if self.phase == "yacht" and self.yacht:
+                self.yacht.update(dt)
+            if self.phase in ("retire", "yacht") and (not self.scene or self.scene.done()):
+                self.card_t += dt            # the final card has been up this long
+            return
         p.want_block = c.want_block = None
         ph = self.phase
 
@@ -2360,29 +3235,6 @@ class Game:
             c.update(dt, 0, p.x + MIN_SEP, STAGE_MAX_X)
         self.ref.update(dt)
 
-    def after_fight(self):
-        p, c = self.player, self.cpu
-        self.phase_t, self.step = 0.0, 0
-        self.bubble = None
-        self.ref.leave()
-        if self.result == "YOU WIN!":
-            if self.stage == len(CAMPAIGN) - 1:
-                self.phase = "champion"
-                p.won, p.end_t = True, max(p.end_t, 0.0)
-                self.confetti = []
-                self.snd("fanfare")
-                self.snd("crowd")
-            else:
-                self.phase = "victory"
-                self.bubble = Bubble(self, c, self.opp["lose"], min_top=88)
-        else:
-            self.phase = "defeat"
-            if not c.won:
-                c.won, c.end_t = True, 0.0
-            if not p.ko:
-                p.ko, p.end_t = True, 0.6
-            self.snd("sad")
-
     def firework(self, x, y):
         col = random.choice(CONFETTI)
         for k in range(26):
@@ -2405,7 +3257,7 @@ class Game:
         elif self.mode == "spar":
             self.start_spar()
         else:
-            self.start_campaign()
+            self.new_career()
 
     def set_level(self, name):
         if self.mode == "campaign":
@@ -2422,15 +3274,26 @@ class Game:
             if ph in ("talk", "reply") and self.bubble:
                 self.bubble.advance()
             elif ph == "victory" and self.phase_t > 0.5:
-                self.stage += 1
-                self.begin_stage()
+                self.after_result()
             elif ph == "defeat":
                 if self.step < 3 and self.bubble:
                     self.bubble.advance()
                 elif self.step >= 3 or self.phase_t > 0.6:
-                    self.start_campaign()             # lose = back to fight 1
+                    self.after_result()
+            elif ph == "scene" and self.scene:
+                self.scene.advance()
+                if self.scene.done():
+                    self.scene_done()
+            elif ph == "menu":
+                self.menu_pick()
             elif ph == "champion" and self.phase_t > 1.5:
-                self.start_campaign()
+                self.start_yacht()
+            elif ph in ("retire", "yacht"):
+                if self.scene and not self.scene.done():
+                    self.scene.advance()
+                elif self.card_t > 0.5:
+                    clear_career()
+                    self.reset_bag()
 
     def mouse(self, x, y, click):
         self.hover = None
@@ -2524,6 +3387,8 @@ class Game:
 
     # ------------------------------------------------------------ update
     def update(self, dt, left=False, right=False, down=False, block=False):
+        if self.saved_t:
+            self.saved_t = max(0.0, self.saved_t - dt) if self.saved_t > 0 else min(0.0, self.saved_t + dt)
         self.info_t = clamp(self.info_t + (dt * 6.5 if self.info_open else -dt * 7.5), 0.0, 1.0)
         if self.info_open:                        # reading the controls pauses the fight
             self.clock += dt
@@ -2822,6 +3687,8 @@ class Game:
         dmg = max(1, int(round(spec["spar_dmg"] * mult * att.punch_power())))
         d.hp = max(0.0, d.hp - dmg)
         d.spend(STAM_HIT)
+        if d.pro_regen:
+            d.stam_t = min(d.stam_t, STAM_REGEN_DELAY - STAM_HIT_PAUSE)   # caught clean: no breather
         d.since_damage = 0.0
         att.dealt += dmg
         att.unanswered = 0
@@ -3185,9 +4052,17 @@ class Game:
         self.flash_t = max(0.0, self.flash_t - dt)
 
     # ------------------------------------------------------------ drawing
+    STORY_PHASES = ("scene", "menu", "retire", "yacht")
+
     def draw(self, out):
         c = self.canvas
         p = self.player
+        if self.mode == "campaign" and self.phase in self.STORY_PHASES:
+            self.draw_story(c)
+            self.draw_info(c)
+            out.fill((20, 16, 28))
+            out.blit(c, (0, 0))
+            return
         if self.arena:
             c.blit(self.arena_bg, (0, 0))
             self.crowd.draw(c, self.clock, self.hype)
@@ -3245,6 +4120,10 @@ class Game:
         else:
             self.draw_spar_hud(c)
         self.draw_button(c)
+        if self.saved_t > 0:
+            self.chip(c, "CAREER SAVED", VW // 2, 44, (150, 240, 160), center=True)
+        elif self.saved_t < 0:
+            self.chip(c, "COULD NOT SAVE", VW // 2, 44, (255, 130, 120), center=True)
         self.draw_info(c)
 
         if self.flash_t > 0:
@@ -3275,6 +4154,81 @@ class Game:
                 pts = [(x0, ry), ((x0 + x1) // 2, ry + bow), (x1, ry)]
                 pygame.draw.lines(c, (20, 18, 30), False, [(x, y + 1) for x, y in pts], 3)
                 pygame.draw.lines(c, col, False, pts, 2)
+
+    def draw_story(self, c):
+        """Between-fights screens: the conversation, the save menu and the two endings."""
+        ph = self.phase
+        if ph == "yacht":
+            self.yacht.draw(c)
+        else:
+            c.blit(self.arena_bg if (self.bout().get("act", 1) > 1 or ph == "menu") else self.bg, (0, 0))
+            if ph != "menu":
+                self.crowd.draw(c, self.clock * 0.25, 0.0) if False else None
+            dim = pygame.Surface((VW, VH), pygame.SRCALPHA)
+            dim.fill((8, 6, 18, 222 if ph == "retire" else 206))
+            c.blit(dim, (0, 0))
+        gold, white, label = (255, 214, 90), (232, 236, 250), (170, 180, 215)
+        if ph == "menu":
+            self.draw_menu(c)
+            return
+        if ph in ("scene", "retire"):                      # chapter heading
+            band = pygame.Surface((VW, 20), pygame.SRCALPHA)
+            band.fill((10, 8, 20, 190))
+            c.blit(band, (0, 14))
+            c.fill((92, 80, 120), (0, 14, VW, 1))
+            c.fill((92, 80, 120), (0, 33, VW, 1))
+            if ph == "retire":
+                draw_text(c, self.font_m, "THE END OF THE ROAD", VW // 2, 19, (255, 120, 110), center=True)
+            else:
+                draw_text(c, self.font_m, "ACT %s" % ("I" * self.bout().get("act", 1)), 10, 18, gold)
+                draw_text(c, self.font_s, "RECORD  %s" % self.record(), VW - 10, 20, label, right=True)
+                draw_text(c, self.font_s, self.bout().get("bout", ""), VW // 2, 20, white, center=True)
+        if self.scene and not self.scene.done():
+            self.scene.draw(c)
+            return
+        if ph == "retire":
+            self.end_card(c, "CAREER OVER", (255, 120, 110),
+                          "FINAL RECORD  %s   -   %d BY KNOCKOUT" % (self.record(), self.kos),
+                          "ENTER  BACK TO THE GYM")
+        elif ph == "yacht":
+            sub = "UNDEFEATED  %s" % self.record() if self.losses == 0 else "RECORD  %s" % self.record()
+            self.end_card(c, "LIGHTWEIGHT CHAMPION OF THE WORLD", gold,
+                          "%s   -   %d BY KNOCKOUT" % (sub, self.kos), "ENTER  BACK TO THE GYM")
+
+    def end_card(self, c, title, col, sub, prompt):
+        band = pygame.Surface((VW, 54), pygame.SRCALPHA)
+        band.fill((10, 8, 20, 205))
+        c.blit(band, (0, 50))
+        c.fill(col, (0, 50, VW, 1))
+        c.fill(col, (0, 103, VW, 1))
+        font = self.font_l if self.font_l.size(title)[0] < VW - 16 else self.font_m
+        draw_text(c, font, title, VW // 2, 58, col, center=True)
+        draw_text(c, self.font_s, sub, VW // 2, 78, (232, 236, 250), center=True)
+        if int(self.clock * 2.5) % 2 == 0:
+            draw_text(c, self.font_s, prompt, VW // 2, 91, (255, 214, 90), center=True)
+
+    def draw_menu(self, c):
+        d = self.save_data or {}
+        gold, white, label = (255, 214, 90), (232, 236, 250), (170, 180, 215)
+        draw_text(c, self.font_l, "YOUR CAREER", VW // 2, 26, gold, center=True)
+        i = clamp(int(d.get("idx", 0)), 0, len(CAREER) - 1)
+        opp = FIGHTERS[d.get("rebuild") or CAREER[i]["opp"]]["short"]
+        rows = [("CONTINUE CAREER", "ACT %s   %s   RECORD %d-%d" % (
+            "I" * CAREER[i].get("act", 1), opp, int(d.get("wins", 0)), int(d.get("losses", 0)))),
+            ("NEW CAREER", "start again from the first night - erases the save")]
+        for k2, (name, sub) in enumerate(rows):
+            r = pygame.Rect(34, 52 + k2 * 36, VW - 68, 30)
+            on = k2 == self.menu_i
+            plate = pygame.Surface(r.size, pygame.SRCALPHA)
+            plate.fill((26, 22, 44, 240) if on else (14, 12, 26, 210))
+            c.blit(plate, r.topleft)
+            pygame.draw.rect(c, gold if on else (74, 66, 96), r, 1)
+            draw_text(c, self.font_m, name, r.x + 10, r.y + 5, gold if on else white)
+            draw_text(c, self.font_s, sub, r.x + 10, r.y + 18, label)
+            if on and int(self.clock * 3) % 2 == 0:
+                draw_text(c, self.font_m, ">", r.x - 9, r.y + 5, gold)
+        draw_text(c, self.font_s, "UP / DOWN  CHOOSE        ENTER  START        TAB  BACK TO BAG",
+                  VW // 2, VH - 34, label, center=True)
 
     def draw_sweep(self, c):
         """Two search lights sweeping the crowd before the fight and during the celebrations."""
@@ -3444,7 +4398,7 @@ class Game:
         edge = (255, 214, 90) if o.get("champ") else o["color"]
         c.fill(edge, (off, y, VW, 1))
         c.fill(edge, (off, y + h - 1, VW, 1))
-        draw_text(c, self.font_s, "FIGHT %d OF %d" % (self.stage + 1, len(CAMPAIGN)), 12 + off, y + 4, (170, 180, 215))
+        draw_text(c, self.font_s, self.bout_line(), 12 + off, y + 4, (170, 180, 215))
         draw_text(c, self.font_l, o["name"], 12 + off, y + 14, o["color"])
         draw_text(c, self.font_s, o["title"], 12 + off, y + 31, (255, 214, 90) if o.get("champ") else (230, 232, 250))
         if o.get("champ"):
@@ -3474,7 +4428,7 @@ class Game:
         s.fill((70, 60, 92), (10, h - 25, w - 20, 1))
         draw_text(s, self.font_s, "TAB  %s        C  CAMPAIGN        BKSP  RESET" % mode,
                   w // 2, h - 22, label, center=True)
-        draw_text(s, self.font_s, "ENTER  CONTINUE     M  MUTE     F11  FULL     ESC  CLOSE",
+        draw_text(s, self.font_s, "ENTER CONTINUE   S SAVE CAREER   M MUTE   ESC CLOSE",
                   w // 2, h - 12, label, center=True)
         self._panel[mode] = s
         return s
@@ -3576,8 +4530,7 @@ class Game:
         tcol = (255, 232, 130) if secs > 10 or int(self.clock * 4) % 2 else (255, 90, 80)
         draw_text(c, self.font_l, "%02d" % secs, VW // 2, 32, tcol, center=True)
         if camp:
-            draw_text(c, self.font_s, "FIGHT %d/%d" % (self.stage + 1, len(CAMPAIGN)), VW // 2 - 14, 36, label,
-                      right=True)
+            draw_text(c, self.font_s, "%d-%d" % (self.wins, self.losses), VW // 2 - 14, 36, label, right=True)
         if self.phase == "fight":
             for f, fx, rt in ((self.player, 8, False), (self.cpu, VW - 8, True)):
                 warn = None
@@ -3597,7 +4550,7 @@ class Game:
             self.banner(c, 50, 44)
             msg = "ROUND 1" if self.phase_t < 0.9 else "FIGHT!"
             draw_text(c, self.font_huge, msg, VW // 2, 54, (255, 232, 130), center=True)
-            sub = ("FIGHT %d OF %d" % (self.stage + 1, len(CAMPAIGN))) if camp else "1 EASY   2 NORMAL   3 HARD"
+            sub = self.bout_line() if camp else "1 EASY   2 NORMAL   3 HARD"
             draw_text(c, self.font_s, sub, VW // 2, 83, label, center=True)
         elif self.phase == "down":
             self.draw_count(c)
@@ -3615,22 +4568,25 @@ class Game:
         elif self.phase == "victory":
             self.banner(c, 40, 36)
             draw_text(c, self.font_xl, "VICTORY!", VW // 2, 43, (120, 240, 140), center=True)
-            nxt = CAMPAIGN[self.stage + 1]
-            draw_text(c, self.font_s, "%s   -   NEXT UP: %s" % (self.method_line(), nxt["short"]),
+            draw_text(c, self.font_s, "%s   -   %s" % (self.method_line(), self.next_label()),
                       VW // 2, 63, white, center=True)
             if int(self.clock * 2.5) % 2 == 0:
-                draw_text(c, self.font_s, "PRESS ENTER FOR THE NEXT FIGHT", VW // 2, 66 + 10, gold, center=True)
+                draw_text(c, self.font_s, "ENTER  CARRY ON        S  SAVE AND STOP HERE", VW // 2, 76, gold,
+                          center=True)
         elif self.phase == "defeat" and self.step >= 2:
             self.banner(c, 36, 28)
             draw_text(c, self.font_l, "DEFEATED", VW // 2, 38, (255, 90, 80), center=True)
-            draw_text(c, self.font_s, "ENTER  TRY AGAIN FROM FIGHT 1        TAB  BACK TO BAG", VW // 2, 52, white,
+            left = MAX_LOSSES - self.losses
+            tail = ("THAT IS YOUR LICENCE GONE" if left <= 0 else
+                    ("ONE MORE LOSS ENDS YOUR CAREER" if left == 1 else "RECORD %s" % self.record()))
+            draw_text(c, self.font_s, tail, VW // 2, 52, (255, 170, 120), center=True)
+            draw_text(c, self.font_s, "ENTER  CARRY ON        S  SAVE AND STOP HERE", VW // 2, 62, white,
                       center=True)
         elif self.phase == "champion":
             pulse = (255, 214, 90) if int(self.clock * 4) % 2 else (255, 250, 200)
             draw_text(c, self.font_l, "NEW LIGHTWEIGHT CHAMPION!", VW // 2, 40, pulse, center=True)
             if self.phase_t > 1.5 and self.step >= 2:
-                draw_text(c, self.font_s, "ENTER  DEFEND YOUR TITLE (NEW CAMPAIGN)        TAB  BAG", VW // 2, 58,
-                          white, center=True)
+                draw_text(c, self.font_s, "ENTER  ...", VW // 2, 58, white, center=True)
         elif self.phase == "result":
             self.banner(c, 46, 56)
             col = (120, 240, 140) if self.result == "YOU WIN!" else ((255, 232, 130) if self.result == "DRAW" else (255, 90, 80))
@@ -3638,6 +4594,13 @@ class Game:
             draw_text(c, self.font_s, self.method_line(), VW // 2, 69, label, center=True)
             draw_text(c, self.font_m, "ENTER  REMATCH        TAB  BACK TO BAG", VW // 2, 80, (230, 232, 250), center=True)
             draw_text(c, self.font_s, "1 EASY   2 NORMAL   3 HARD", VW // 2, 92, label, center=True)
+
+    def bout_line(self):
+        """How tonight's fight is billed."""
+        if self.rebuild:
+            return "TUNE-UP BOUT   -   RECORD %s" % self.record()
+        b = self.bout()
+        return "ACT %s   -   %s" % ("I" * b.get("act", 1), b.get("bout", "LIGHTWEIGHT"))
 
     def method_line(self):
         m = self.method or "DECISION"
@@ -3693,7 +4656,7 @@ def handle_key(game, key):
         elif key == pygame.K_F11:
             pygame.display.toggle_fullscreen()
         return True
-    if key in PUNCH_KEYS:
+    if key in PUNCH_KEYS and not (game.mode == "campaign" and game.phase in ("victory", "defeat", "scene", "menu")):
         name = PUNCH_KEYS[key]
         held = pygame.key.get_pressed()
         if name != "slip" and any(held[k] for k in FEINT_KEYS):
@@ -3701,6 +4664,10 @@ def handle_key(game, key):
         game.press(name)
     elif key == CLINCH_KEY:
         game.clinch()
+    elif key == pygame.K_s and game.mode == "campaign" and game.phase in ("victory", "defeat", "scene"):
+        game.save_and_quit()
+    elif key in (pygame.K_UP, pygame.K_DOWN) and game.mode == "campaign" and game.phase == "menu":
+        game.menu_move(1 if key == pygame.K_DOWN else -1)
     elif key == pygame.K_TAB:
         game.toggle_mode()
     elif key == pygame.K_c:
