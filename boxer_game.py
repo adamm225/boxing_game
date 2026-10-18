@@ -164,7 +164,12 @@ MASH_DECAY = 1.1             # the get-up meter drains this many presses per sec
 # ============================================================ clinch and ropes
 CLINCH_RANGE = 14            # how far past touching distance you can reach to tie him up
 CLINCH_TIME = 1.25           # seconds before the referee pulls you apart
+PIVOT_TIME = 0.34            # seconds to roll round him
+PIVOT_CD = 1.6               # you cannot spin all night
+PIVOT_STAM = 15.0            # what it costs you
+PIVOT_GAP = 6                # where you come up relative to him
 CLINCH_CD = 2.6              # you can't just hold on all night
+CLINCH_CD_ROPES = 1.0        # ...but with your back on the ropes you can grab him again sooner
 CLINCH_STAM = 26.0           # wind recovered per second while you're holding on
 CLINCH_DAZE = 34.0           # dizziness cleared per second while you're holding on
 CLINCH_WHIFF = 0.55          # grabbed at air: that long wide open
@@ -258,14 +263,26 @@ BUFFER_TIME = 0.8            # a key pressed up to this long before you can act 
 #   guard_up : how often it just sits behind its guard    learn : how fast it reads your habits
 #   feint    : how often it throws feints of its own      pace : how well it rations its wind
 LEVELS = {
-    "EASY": dict(react=0.30, delay=(0.13, 0.30), slip=0.15, wrong=0.30, parry=0.0, atk=(1.0, 2.2),
+    "EASY": dict(react=0.30, delay=(0.18, 0.34), slip=0.15, wrong=0.38, parry=0.0, atk=(1.0, 2.2),
                  combo=0.20, flurry=0.25, punish=0.20, guard_up=0.10, learn=0.3, feint=0.0, pace=0.45),
-    "NORMAL": dict(react=0.65, delay=(0.07, 0.16), slip=0.25, wrong=0.12, parry=0.30, atk=(0.6, 1.4),
+    "NORMAL": dict(react=0.63, delay=(0.12, 0.22), slip=0.25, wrong=0.18, parry=0.30, atk=(0.6, 1.4),
                    combo=0.35, flurry=0.50, punish=0.55, guard_up=0.20, learn=1.0, feint=0.18, pace=0.8),
-    "HARD": dict(react=0.8, delay=(0.04, 0.11), slip=0.30, wrong=0.06, parry=0.45, atk=(0.45, 1.1),
+    "HARD": dict(react=0.76, delay=(0.09, 0.17), slip=0.30, wrong=0.12, parry=0.45, atk=(0.45, 1.1),
                  combo=0.50, flurry=0.70, punish=0.70, guard_up=0.25, learn=1.5, feint=0.3, pace=1.0),
 }
 LEVEL_KEYS = ["EASY", "NORMAL", "HARD"]
+# He is never certain. However good he is, there is always a way through - and sustained pressure
+# makes his reads worse, not better, which is what lets volume punching work.
+REACT_CAP = 0.82             # the most often any fighter will try to defend a punch
+REACT_PRESSURE = 0.12        # how much a sustained burst degrades his reading
+PARRY_SCALE = 0.72           # how much of a fighter's parry rating actually fires
+PARRY_JITTER = (-0.06, 0.11) # his timing is human: some parries come early, some come late
+BLOCK_REST = 0.16            # after he blocks he is briefly committed - that is your turn
+PIN_PATIENCE = 1.5           # seconds he will pin you on the ropes before resetting
+PIN_RESET = (0.55, 0.85)       # ...and how long he backs off for
+GLANCE_CHANCE = 0.55         # chance of rolling with a punch you are already moving away from
+GLANCE_DMG = 0.4             # what a glancing blow is worth
+DMG_VARIANCE = 0.12          # no two punches land exactly the same
 
 # ============================================================ looks (palette swaps of the player sprite)
 SRC = dict(  # the player's colours that get swapped
@@ -1874,11 +1891,11 @@ INFO_CENTER = (15, VH - 13)      # the little "i" in the bottom-left corner
 INFO_D, INFO_D_HOVER = 17, 21    # its size normally / under the pointer
 INFO_PANEL = pygame.Rect(8, 2, VW - 16, 156)
 MOVE_ROWS = (("ARROWS", "MOVE"), ("A", "JAB"), ("S", "CROSS"), ("D", "BODY JAB"), ("F", "BODY CROSS"),
-             ("W", "SLIP"), ("E HOLD", "HIGH BLOCK"), ("R HOLD", "LOW BLOCK"), ("SHIFT+A..F", "FEINT"),
-             ("Q", "CLINCH"))
+             ("W", "SLIP"), ("E / R HOLD", "BLOCK HI / LOW"), ("SHIFT+A..F", "FEINT"),
+             ("Q", "CLINCH"), ("X", "PIVOT"))
 FIGHT_TIPS = ("Slip then punch = COUNTER", "Block late = PARRY", "Flurries break a guard",
               "Body shots cut healing", "Feint him, then land big", "Guard up = wind back",
-              "On the ropes = hurt more", "3 knockdowns = T.K.O.", "Mash A S D F to get up")
+              "X pivots you off the ropes", "3 knockdowns = T.K.O.", "Mash A S D F to get up")
 
 
 def make_info_icon(d, fill, ring, glyph, ring_w=1, halo=3):
@@ -1951,8 +1968,9 @@ class Bag:
 
 # ============================================================ a boxer (you or the computer)
 class Fighter:
-    def __init__(self, game, frames, facing):
+    def __init__(self, game, frames, facing, sets=None):
         self.game = game
+        self.sets = sets or (frames, frames)   # (facing right, facing left)
         self.frames = frames
         self.facing = facing           # +1 faces right, -1 faces left
         self.pro_regen = False         # True for YOU: blocking and footwork give wind back
@@ -1999,6 +2017,10 @@ class Fighter:
         self.clinch = False
         self.clinch_t = 0.0
         self.clinch_cd = 0.0
+        # --- pivot
+        self.pivot_t = 0.0             # >0 while rolling round him
+        self.pivot_cd = 0.0
+        self.pivot_from = self.pivot_to = 0.0
         # --- feints
         self.bait_t = 0.0              # >0: he bit on your feint, hit him NOW
         self.feinted_t = 0.0           # >0: you just threw a feint
@@ -2025,7 +2047,17 @@ class Fighter:
     # ------------------------------------------------------------ state queries
     def busy(self):
         return (self.ko or self.won or self.stun_t > 0 or self.hitstun > 0 or self.down or self.out_cold
-                or self.liver_t > 0 or self.clinch)
+                or self.liver_t > 0 or self.clinch or self.pivot_t > 0)
+
+    def set_sets(self, right, left):
+        self.sets = (right, left)
+        self.frames = right if self.facing > 0 else left
+
+    def face(self, d):
+        """Turn to face the other man. Never mid-punch - you finish what you threw."""
+        if d and d != self.facing and not self.action and not self.clinch:
+            self.facing = d
+            self.frames = self.sets[0] if d > 0 else self.sets[1]
 
     def spd(self):
         """Animation speed right now: hurt and gassed fighters punch slower."""
@@ -2107,7 +2139,8 @@ class Fighter:
         self.buffer = None
         self.stun_t = 0.0
         self.hitstun = stun
-        self.react = F_HIT_HEAD if target == "head" else F_HIT_BODY
+        pair = F_HIT_HEAD if target == "head" else F_HIT_BODY
+        self.react = pair if random.random() < 0.6 else (pair[1], pair[0])
         self.react_t, self.react_total = 0.0, stun
 
     def stagger(self, dur):
@@ -2150,6 +2183,9 @@ class Fighter:
             return F_KO[0] if self.down_t < 0.12 else (F_KO[1] if self.down_t < 0.42 else F_KO[2])
         if self.clinch:
             return F_BLOCK_HIGH[1]
+        if self.pivot_t > 0:
+            k = 1.0 - self.pivot_t / PIVOT_TIME
+            return ACTIONS["slip"]["frames"][min(len(ACTIONS["slip"]["frames"]) - 1, int(k * 5))]
         if self.liver_t > 0:
             return F_HIT_BODY[1]
         if self.ko and self.ko_style == "stand":
@@ -2180,6 +2216,7 @@ class Fighter:
         self.counter_t = max(0.0, self.counter_t - dt)
         self.bait_t = max(0.0, self.bait_t - dt)
         self.clinch_cd = max(0.0, self.clinch_cd - dt)
+        self.pivot_cd = max(0.0, self.pivot_cd - dt)
         self.feinted_t = max(0.0, self.feinted_t - dt)
         self.parry_cd = max(0.0, self.parry_cd - dt)
         self.block_hit_t = max(0.0, self.block_hit_t - dt)
@@ -2229,6 +2266,17 @@ class Fighter:
             self.hurt = False
             self.unanswered = 0
         self.body_dmg = max(0.0, self.body_dmg - BODY_DECAY * dt)
+        if self.pivot_t > 0:                     # rolling round him: untouchable, and moving
+            self.pivot_t = max(0.0, self.pivot_t - dt)
+            k = 1.0 - self.pivot_t / PIVOT_TIME
+            ease = k * k * (3 - 2 * k)
+            self.x = self.pivot_from + (self.pivot_to - self.pivot_from) * ease
+            if random.random() < dt * 40:
+                self.ghosts.append(self.make_ghost(self.current_frame()))
+            self.moving = 0
+            if self.pivot_t <= 0:
+                self.counter_t = COUNTER_WINDOW   # come up off the pivot and he is yours
+            return
         if self.clinch:                          # tied up: catch your breath and clear your head
             self.stam = min(float(STAM_MAX), self.stam + CLINCH_STAM * dt)
             self.gassed = self.stam < GAS_LINE
@@ -2434,7 +2482,14 @@ class AI:
         self.pairs = {}                          # (punch, next punch) -> how often he does it
         self.expect = None                       # the punch he is expecting next
         self.feint_wise = 0.0                    # how wise he currently is to your feints (it fades)
+        self.block_rest = 0.0                    # just blocked: committed for a moment
+        self.pin_t = 0.0                         # how long he has had you stuck on the ropes
+        self.reset_t = 0.0                       # backing off out of range to let it breathe
         self.read_t = 0.0                        # >0 while he has your number (shown on screen)
+
+    def toward(self, foe):
+        """Which way is the other man from here (+1 right, -1 left)."""
+        return 1 if foe.x > self.me.x else -1
 
     def learn(self, name):
         """Remember what he keeps throwing, and what he likes to throw after it."""
@@ -2494,14 +2549,30 @@ class AI:
         self.move = 0
         self.clock += dt
         self.read_t = max(0.0, self.read_t - dt)
+        self.block_rest = max(0.0, self.block_rest - dt)
         self.feint_wise = max(0.0, self.feint_wise - 0.3 * dt)   # space them out and they work again
+        # --- he will not tee off on a man in the corner forever: after a sustained burst he
+        #     steps back out to mid-range and makes you come to him.
+        if foe.on_ropes() and abs(me.x - foe.x) < MIN_SEP + 20 and me.action in PUNCHES:
+            self.pin_t += dt
+        else:
+            self.pin_t = max(0.0, self.pin_t - dt * 0.8)
+        if self.pin_t > PIN_PATIENCE and self.reset_t <= 0:
+            self.pin_t = 0.0
+            self.reset_t = random.uniform(*PIN_RESET)
+        if self.reset_t > 0:
+            self.reset_t -= dt
+            self.move = -self.toward(foe)        # give him room to come off the ropes
+            if self.reset_t > 0.25:
+                return
         if me.busy():
             self.plan.clear()
             self.def_plan = None
             self.guard_t = 0.0
             me.want_block = None
             return
-        dist = me.x - foe.x
+        dist = abs(me.x - foe.x)
+        toward = self.toward(foe)
 
         # --- notice punches (and feints) coming in
         if foe.action in THREATS and foe.attack_id != self.seen:
@@ -2511,9 +2582,11 @@ class AI:
             target = ACTIONS[foe.action]["target"]
             self.foe_body = (self.foe_body + [target == "body"])[-4:]
             self.foe_times = [t for t in self.foe_times if self.clock - t < 1.2] + [self.clock]
-            react = (L["react"] + (0.15 if me.hp < 0.35 * me.max_hp else 0.0)
-                     + (0.2 if len(self.foe_times) >= 3 else 0.0) + (0.18 if me.hurt else 0.0)
-                     + self.read_bonus(real))
+            react = (L["react"] + (0.08 if me.hp < 0.35 * me.max_hp else 0.0)
+                     + (0.1 if me.hurt else 0.0) + self.read_bonus(real))
+            if len(self.foe_times) >= 3:
+                react -= REACT_PRESSURE        # you are letting your hands go: his reads start to go
+            react = clamp(react, 0.04, REACT_CAP)
             if feint:
                 react *= clamp(1.0 - self.feint_wise * 0.15, 0.3, 1.0)    # he wises up to repeated feints
             if dist <= R[real] + 6 and random.random() < react:
@@ -2523,8 +2596,11 @@ class AI:
                     kind = "high" if target == "head" else "low"
                     if random.random() < max(0.0, L["wrong"] - self.read_bonus(real)):
                         kind = "low" if kind == "high" else "high"
-                if kind != "slip" and random.random() < L["parry"]:
-                    wait = max(0.0, time_to_active(foe) - 0.06) if not feint else random.uniform(*L["delay"])
+                if kind != "slip" and random.random() < L["parry"] * PARRY_SCALE:
+                    # he TRIES to time it, but he is guessing at your rhythm - early is a plain
+                    # block, late and the punch is already through him
+                    wait = (max(0.0, time_to_active(foe) - 0.06 + random.uniform(*PARRY_JITTER))
+                            if not feint else random.uniform(*L["delay"]))
                     me.parry_ok = not feint
                 else:
                     wait = random.uniform(*L["delay"])
@@ -2588,6 +2664,8 @@ class AI:
                 self.plan = self.choose_attack(L, foe)
             else:
                 self.atk_t *= 0.3
+        if self.block_rest > 0:
+            return
         if self.plan and me.can_start(self.plan[0]):
             nxt = self.plan[0]
             if (nxt in PUNCHES and me.stam > 35 and foe.block is None and not foe.busy()
@@ -2613,7 +2691,7 @@ class AI:
             self.retreat_t = random.uniform(0.5, 1.0)    # hurt: get on the bike and survive
         if self.retreat_t > 0:
             self.retreat_t -= dt
-            self.move = 1
+            self.move = -toward
         elif me.stam < 24 * L.get("pace", 1.0) and not foe.hurt and random.random() < 2.2 * dt:
             self.retreat_t = random.uniform(0.8, 1.6)    # circle away and get the breath back
         elif me.hp < 0.3 * me.max_hp and me.hp < me.regen_cap and random.random() < 0.5 * dt:
@@ -2622,7 +2700,7 @@ class AI:
             self.step_t -= dt
             self.move = self.step_dir
         elif dist > desired + 3:
-            self.move = -1
+            self.move = toward
         elif random.random() < 0.8 * dt:
             self.step_t = random.uniform(0.12, 0.3)
             self.step_dir = random.choice([-1, 1])
@@ -2698,8 +2776,11 @@ class Game:
         strip = load_strip(STRIP_B64)
         frames = split(strip)
         self.strip = strip
-        self.spar_frames = split(recolor(strip, look_palette(**SPAR_LOOK)), flip=True)
+        spar_base = recolor(strip, look_palette(**SPAR_LOOK))
+        self.spar_sets = (split(spar_base), split(spar_base, flip=True))
+        self.spar_frames = self.spar_sets[1]
         self.frames = frames
+        self.player_sets = (frames, split(strip, flip=True))
         self._fset, self._port = {}, {}
         self.belt = make_belt()
         self.belt_small = pygame.transform.scale(self.belt, (18, 7))
@@ -2768,11 +2849,11 @@ class Game:
             except pygame.error:
                 self.crowd_ch = None
 
-        self.player = Fighter(self, frames, 1)
+        self.player = Fighter(self, frames, 1, self.player_sets)
         self.player.pro_regen = True
         self.player.configure(chin=PLAYER_CHIN)
         self.player.reset(72)
-        self.cpu = Fighter(self, self.spar_frames, -1)
+        self.cpu = Fighter(self, self.spar_frames, -1, self.spar_sets)
         self.ai = AI(self, self.cpu, self.player)
         self.clock = 0.0
         self.mode = "bag"
@@ -2871,7 +2952,7 @@ class Game:
 
     def start_spar(self):
         self.mode = "spar"
-        self.cpu.frames = self.spar_frames
+        self.cpu.set_sets(*self.spar_sets)
         self.cpu.configure()
         self.ai.set_level(self.ai.level if self.ai.level in LEVELS else "NORMAL")
         self.player.reset(96)
@@ -2887,18 +2968,19 @@ class Game:
         self.snd("bell")
 
     # ------------------------------------------------------------ career
-    def fighter_frames(self, key):
-        """Sprite set for one fighter, recoloured on first use and kept."""
+    def fighter_frames(self, key, facing=-1):
+        """Sprite set for one fighter, recoloured on first use and kept, in both orientations."""
         if key not in self._fset:
             look = FIGHTERS[key].get("look")
             base = self.strip if look is None else recolor(self.strip, look_palette(**look))
-            self._fset[key] = split(base, flip=True)
-        return self._fset[key]
+            self._fset[key] = (split(base), split(base, flip=True))
+        pair = self._fset[key]
+        return pair[0] if facing > 0 else pair[1]
 
     def portrait(self, key):
         """A head-and-shoulders crop of a fighter, for the story cards."""
         if key not in self._port:
-            frames = self.frames if key == "you" else self.fighter_frames(key)
+            frames = self.frames if key == "you" else self.fighter_frames(key, -1)
             f = frames[PORTRAIT_FRAME]
             top, cx = self.frame_top(frames, PORTRAIT_FRAME)
             if key == "you":
@@ -2999,7 +3081,7 @@ class Game:
         o = self.opp = dict(FIGHTERS[key])
         self.opp_key = key
         p, c = self.player, self.cpu
-        c.frames = self.fighter_frames(key)
+        c.set_sets(self.fighter_frames(key, 1), self.fighter_frames(key, -1))
         c.configure(o["hp"], o["power"], o["speed"], o["walk"], o.get("chin", 1.0), o.get("heart", 1.0),
                     o.get("wind", 1.0))
         p.reset(96)
@@ -3325,6 +3407,37 @@ class Game:
         self.snd("blip")
 
     # ------------------------------------------------------------ input
+    def pivot(self):
+        """Roll round him and come up on his other side - how you get off the ropes."""
+        if self.info_open or self.mode == "bag" or self.phase != "fight":
+            return
+        p, c = self.player, self.cpu
+        if p.busy() or p.pivot_cd > 0 or p.stam < PIVOT_STAM or c.down or c.out_cold or c.ko:
+            if p.pivot_cd > 0 or p.stam < PIVOT_STAM:
+                self.say("NO LEGS" if p.stam < PIVOT_STAM else "NOT YET",
+                         p.x - 16, GROUND - 68, (190, 190, 210), self.font_s, vy=-14, life=0.5)
+            return
+        toward = 1 if c.x > p.x else -1
+        far = c.x + toward * (MIN_SEP + PIVOT_GAP)
+        if not (MIN_X + 2 <= far <= STAGE_MAX_X - 2):
+            far = c.x - toward * (MIN_SEP + PIVOT_GAP)     # no room past him: slip out the near side
+        p.finish_action()
+        p.block = p.want_block = None
+        p.buffer = None
+        p.hitstun = p.stun_t = 0.0
+        p.react = None
+        p.pivot_from, p.pivot_to = p.x, clamp(far, MIN_X + 2, STAGE_MAX_X - 2)
+        p.pivot_t = PIVOT_TIME
+        p.pivot_cd = PIVOT_CD
+        p.spend(PIVOT_STAM)
+        for k in range(3):
+            p.ghosts.append(p.make_ghost())
+        self.ai.plan.clear()
+        self.ai.def_plan = None
+        self.ai.pin_t = 0.0
+        self.say("PIVOT!", p.x - 16, GROUND - 72, (150, 230, 255), self.font_m, vy=-16, life=0.7)
+        self.snd("slip")
+
     def clinch(self):
         if self.info_open:
             return
@@ -3424,9 +3537,11 @@ class Game:
         if self.phase == "fight":
             self.round_time -= dt
             p.want_block = want
+            self.face_off()
             self.ai.update(dt)
-            p.update(dt, move, MIN_X, c.x - MIN_SEP)
-            c.update(dt, self.ai.move, p.x + MIN_SEP, STAGE_MAX_X)
+            lo_p, hi_p, lo_c, hi_c = self.lanes()
+            p.update(dt, move, lo_p, hi_p)
+            c.update(dt, self.ai.move, lo_c, hi_c)
             self.resolve(p, c)
             self.resolve(c, p)
             self.separate()
@@ -3505,23 +3620,47 @@ class Game:
     METHOD_SUB = {"KO": "COUNTED OUT", "OUT COLD": "KNOCKED OUT COLD", "TKO": "THREE KNOCKDOWNS",
                   "STOPPAGE": "THE REFEREE STOPS IT", "DECISION": "THE JUDGES' DECISION", "DRAW": "THE JUDGES CALL IT A DRAW"}
 
+    def face_off(self):
+        """Both men turn to face each other, whoever is on the left."""
+        p, c = self.player, self.cpu
+        if abs(c.x - p.x) < 2:
+            return
+        d = 1 if c.x > p.x else -1
+        p.face(d)
+        c.face(-d)
+
+    def lanes(self):
+        """How far each man may walk, given who is currently on the left."""
+        p, c = self.player, self.cpu
+        if p.pivot_t > 0 or c.pivot_t > 0:
+            return MIN_X, STAGE_MAX_X, MIN_X, STAGE_MAX_X
+        if p.x <= c.x:
+            return MIN_X, c.x - MIN_SEP, p.x + MIN_SEP, STAGE_MAX_X
+        return c.x + MIN_SEP, STAGE_MAX_X, MIN_X, p.x - MIN_SEP
+
     def separate(self):
         p, c = self.player, self.cpu
-        gap = c.x - p.x
+        if p.pivot_t > 0 or c.pivot_t > 0:
+            return                                  # let him roll straight past
+        left, right = (p, c) if p.x <= c.x else (c, p)
+        gap = right.x - left.x
         if gap < MIN_SEP:
             need = MIN_SEP - gap
-            room_p, room_c = p.x - MIN_X, STAGE_MAX_X - c.x
-            mp = min(room_p, need / 2)
-            mc = min(room_c, need - mp)
-            mp = min(room_p, need - mc)
-            p.x -= mp
-            c.x += mc
+            room_l, room_r = left.x - MIN_X, STAGE_MAX_X - right.x
+            ml = min(room_l, need / 2)
+            mr = min(room_r, need - ml)
+            ml = min(room_l, need - mr)
+            left.x -= ml
+            right.x += mr
 
     # ------------------------------------------------------------ clinch
     def try_clinch(self, f):
         """Grab hold of the other man. In range it ties you both up; short and you're wide open."""
         o = self.cpu if f is self.player else self.player
-        if f.busy() or f.clinch_cd > 0 or self.phase != "fight" or o.down or o.out_cold or o.ko:
+        if f.busy() or self.phase != "fight" or o.down or o.out_cold or o.ko:
+            return
+        cd = CLINCH_CD_ROPES if f.on_ropes() else CLINCH_CD   # stuck on the ropes? grab him sooner
+        if f.clinch_cd > CLINCH_CD - cd:
             return
         f.finish_action()
         f.block = f.want_block = None
@@ -3557,8 +3696,9 @@ class Game:
             self.call_ref(self.cpu if self.clinch_by is self.player else self.player)
         if t >= CLINCH_TIME:
             for g in (p, c):
+                was_roped = g.on_ropes()
                 g.clinch, g.clinch_t = False, 0.0
-                g.push(-6)                        # the ref shoves them apart
+                g.push(-18 if was_roped else -6)   # the ref shoves them apart, off the ropes
             self.ref.set_pose("wave_b", 0.35)
             self.ref.leave()
             self.say("BREAK!", VW // 2 - 22, 72, (255, 232, 130), self.font_l, vy=-8, life=0.8)
@@ -3621,6 +3761,7 @@ class Game:
         self.snd("block")
         if d is self.cpu:
             self.ai.punish = True          # fire back while the attacker recovers
+            self.ai.block_rest = BLOCK_REST
         if d.guard <= 0:
             d.guard = 0.0
             d.stagger(GUARD_BREAK_STUN)
@@ -3662,6 +3803,8 @@ class Game:
         crit = stunned                            # hitting a stunned boxer is always critical
         counter_hit = d.in_startup()
         walking_in = d.moving == 1
+        # rolling with it: a punch you are already moving away from does not land clean
+        glancing = (d.moving == -1 and not stunned and random.random() < GLANCE_CHANCE)
         if counter_hit:
             mult *= COUNTER_HIT_MULT
             chance += 0.12
@@ -3670,6 +3813,9 @@ class Game:
             mult *= COUNTER_MULT
             chance += 0.2
             tags.append(("COUNTER!", (120, 220, 255)))
+        if glancing:
+            crit, chance, tags = False, 0.0, []
+            mult *= GLANCE_DMG
         crit = crit or random.random() < chance
         if crit:
             mult *= CRIT_MULT
@@ -3684,7 +3830,10 @@ class Game:
         imp = self.impact(att, d, name, ext, counter_hit, walking_in, att.is_counter, crit, stunned)
         if baited:
             imp *= BAIT_MULT
-        dmg = max(1, int(round(spec["spar_dmg"] * mult * att.punch_power())))
+        if glancing:
+            imp *= 0.35
+        dmg = max(1, int(round(spec["spar_dmg"] * mult * att.punch_power()
+                                * random.uniform(1 - DMG_VARIANCE, 1 + DMG_VARIANCE))))
         d.hp = max(0.0, d.hp - dmg)
         d.spend(STAM_HIT)
         if d.pro_regen:
@@ -3700,7 +3849,7 @@ class Game:
             d.body_dmg += dmg * (0.8 + 0.3 * imp)
             scale = d.max_hp / MAX_HP
             d.regen_cap = max(REGEN_CAP_MIN * scale, d.regen_cap - BODY_CAP_LOSS * scale)
-        d.get_hit(target, spec["stun"] + (0.25 if crit else 0.0))
+        d.get_hit(target, spec["stun"] * (0.45 if glancing else 1.0) + (0.25 if crit else 0.0))
         d.push((12 if crit else (7 if spec["guard"] > 20 else 4)) + (ROPE_SHOVE if not d.on_ropes() else 0))
         if d is self.player:
             self.combo, self.combo_t = 0, 0.0
@@ -3709,7 +3858,7 @@ class Game:
             self.combo_t = 1.0
             self.best = max(self.best, self.combo)
 
-        big = crit or spec["guard"] > 20
+        big = (crit or spec["guard"] > 20) and not glancing
         self.stars.append(dict(x=hx, y=hy, t=0.0, life=0.2 if crit else 0.16, big=big, kind="crit" if crit else "hit"))
         for _ in range(18 if crit else (12 if big else 7)):
             a = random.uniform(-1.2, 1.2) + (0 if d.facing < 0 else math.pi)
@@ -3723,7 +3872,11 @@ class Game:
                 self.parts.append([hx, hy - 4, math.cos(a) * sp, math.sin(a) * sp - 50, random.uniform(0.3, 0.55),
                                    random.choice([(200, 230, 255), (255, 255, 255)])])
         col = (255, 232, 130) if not crit else (255, 110, 70)
-        self.say(str(dmg), hx - 6, hy - 14, col, self.font_xl if crit else self.font_l, vy=-26)
+        if glancing:
+            col = (190, 196, 220)
+            self.say("GRAZED", hx - 20, hy - 26, col, self.font_s, vy=-16, life=0.6)
+        self.say(str(dmg), hx - 6, hy - 14, col, self.font_m if glancing else (self.font_xl if crit else self.font_l),
+                 vy=-26)
         y = hy - 30
         if crit:
             self.say("CRITICAL!", hx - 28, y, (255, 120, 60), self.font_l, vy=-20, life=1.0)
@@ -3732,16 +3885,19 @@ class Game:
         for s, cc in tags:
             self.say(s, hx - 26, y, cc, self.font_m, vy=-18, life=0.9)
             y -= 12
-        self.hitstop = 0.12 if crit else spec["stop"]
-        self.shake = 4 if crit else spec["shake"]
-        self.shake_t = 0.18 if crit else 0.12
-        if crit:
+        self.hitstop = (spec["stop"] * 0.4) if glancing else (0.12 if crit else spec["stop"])
+        self.shake = 1 if glancing else (4 if crit else spec["shake"])
+        self.shake_t = 0.08 if glancing else (0.18 if crit else 0.12)
+        if glancing:
+            self.snd("block")
+        elif crit:
             self.snd("crit")
         elif target == "body":
             self.snd("hit_body_big" if big else "hit_body")
         else:
             self.snd("hit_cross" if big else "hit_jab")
-        self.excite(0.015 + 0.012 * imp * imp)    # jabs barely stir them; big shots really do
+        if not glancing:
+            self.excite(0.015 + 0.012 * imp * imp)    # jabs barely stir them; big shots really do
         if self.arena and imp >= 2.7:
             self.snd("ooh")
 
@@ -3797,7 +3953,8 @@ class Game:
 
     # ------------------------------------------------------------ knockdowns
     def corner_x(self, f):
-        return MIN_X + 8 if f is self.player else STAGE_MAX_X - 8
+        o = self.cpu if f is self.player else self.player
+        return MIN_X + 8 if o.x > f.x else STAGE_MAX_X - 8
 
     def call_ref(self, d, wave=False):
         """Referee steps in over the fighter d (from the side away from him)."""
@@ -3884,9 +4041,9 @@ class Game:
         cx = self.corner_x(o)
         move = 0 if abs(o.x - cx) < 2 or self.phase_t < 0.4 else (1 if cx > o.x else -1)
         if o is self.player:
-            o.update(dt, move, MIN_X, d.x - MIN_SEP)
+            o.update(dt, move, *((MIN_X, d.x - MIN_SEP) if o.x <= d.x else (d.x + MIN_SEP, STAGE_MAX_X)))
         else:
-            o.update(dt, move, d.x + MIN_SEP, STAGE_MAX_X)
+            o.update(dt, move, *((d.x + MIN_SEP, STAGE_MAX_X) if o.x > d.x else (MIN_X, d.x - MIN_SEP)))
         d.update(dt, 0, MIN_X, STAGE_MAX_X)
         if not dn["thud"] and d.down_t >= 0.42:
             dn["thud"] = True
@@ -4635,6 +4792,7 @@ PUNCH_KEYS = {pygame.K_a: "jab", pygame.K_s: "cross", pygame.K_d: "body_jab", py
 HIGH_BLOCK_KEY, LOW_BLOCK_KEY = pygame.K_e, pygame.K_r
 FEINT_KEYS = (pygame.K_LSHIFT, pygame.K_RSHIFT, pygame.K_g)   # hold + a punch = feint it
 CLINCH_KEY = pygame.K_q
+PIVOT_KEY = pygame.K_x                            # roll round him and off the ropes
 INFO_KEYS = (pygame.K_i, pygame.K_F1)             # open the controls panel
 
 
@@ -4664,6 +4822,8 @@ def handle_key(game, key):
         game.press(name)
     elif key == CLINCH_KEY:
         game.clinch()
+    elif key == PIVOT_KEY:
+        game.pivot()
     elif key == pygame.K_s and game.mode == "campaign" and game.phase in ("victory", "defeat", "scene"):
         game.save_and_quit()
     elif key in (pygame.K_UP, pygame.K_DOWN) and game.mode == "campaign" and game.phase == "menu":
