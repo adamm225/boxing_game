@@ -2,12 +2,18 @@
 """
 BOXER - a tiny retro boxing game.
 
-Starts in BAG mode (free practice on a heavy bag). Next to the BOXING GYM sign:
-    SPAR      (or TAB)  three rounds against a sparring partner (a different fighting style each time)
-    CAMPAIGN  (or C)    a boxing career, different every time: pick your fights from the offers on
+Starts in BAG mode (free practice on a heavy bag). Click the signs next to the BOXING GYM sign,
+or press P for the same menu from the keyboard:
+    SPAR                three rounds against a sparring partner (a different fighting style each time)
+    CAMPAIGN            a boxing career, different every time: pick your fights from the offers on
                         the table, choose what to work on in camp, climb from club shows to a world
                         title - and make the calls the story puts in front of you
     BAG                 back to the heavy bag
+
+    P                   the menu, wherever you are. At the gym it is where you pick SPARRING or
+                        CAMPAIGN; in a fight it is RESUME / QUIT TO THE GYM, and in a career
+                        RESUME / SAVE AND QUIT TO THE GYM. Leaving a fight always takes two
+                        presses, so nothing gets thrown away by a mistyped key.
 
     i  (bottom-left)   the controls panel - hover it, click it, or press I / F1
     ARROWS             move anywhere on the canvas - the ring has depth now. You always face
@@ -25,11 +31,12 @@ Starts in BAG mode (free practice on a heavy bag). Next to the BOXING GYM sign:
     F                  body cross
     Z                  lead hook - short and heavy; it comes ROUND, so a side-step won't beat it
     V                  rear uppercut - shortest of all; splits a high guard, catches a man slipping
-                       (miss with a hook or an uppercut and you're off balance for a moment)
+                       (swing and miss with either and your weight goes with it - see BALANCE)
     W                  slip  (dodges head shots; punch right after for a COUNTER)
     E  (hold)          high block   - stops head shots, body shots still land
     R  (hold)          low block    - stops body shots, head is open
                        Tap block just before a punch lands to PARRY it (attacker is stunned).
+    P                  pause: where to next / leave this fight (see the top of this list)
     BACKSPACE          reset bag / restart fight
     1 / 2 / 3          sparring difficulty (easy / normal / hard)
     ENTER              rematch after a fight
@@ -37,9 +44,43 @@ Starts in BAG mode (free practice on a heavy bag). Next to the BOXING GYM sign:
 
 Wind (stamina)
     * Every punch costs wind - a cross costs twice a jab. Blocking and walking cost a little too.
-      Stop punching and it comes back; stand still and breathe and it comes back faster.
+      Stop punching and it comes back; stand still and breathe and it comes back faster. You get
+      almost none back while a punch is still running, so a wild spell you keep missing with empties
+      the tank twice as fast: once for the punches, once for the long recoveries.
     * Empty the tank and you are GASSED: slower hands, weaker punches, a guard that caves in and
       a chin that will not hold up. Pace yourself. Rushing in is how you lose a fight you were winning.
+
+Balance and weight (v12)
+    A punch is not a move that either works or doesn't - it is a commitment, and you pay for it.
+    * BALANCE is the blue bar under your wind. Throwing takes your weight off your feet. What it
+      costs depends on the punch (a hook costs four times a jab), on how far you had to reach, and
+      above all on what stopped it:
+          landed flush  - cheapest. His head took the momentum, you stay square over your feet.
+          caught on the gloves - dearer.
+          hit thin air  - dearest by far. Nothing took your weight but the floor.
+    * Low balance is not a penalty box, it's a slope: your punches lose the power that comes up off
+      your legs, your hands slow down, your recovery drags, he shoves you around more easily, and
+      you can no longer roll with a shot - so everything he throws hurts more. Spend past what you
+      have and your feet go completely (OFF BALANCE) - you are wide open, and it is your own fault
+      rather than a timer attached to one punch.
+    * It comes back fastest standing still, slower on the move, barely at all mid-punch. A clinch is
+      a rest for the legs. An empty wind tank costs you most of your recovery.
+    * WEIGHT TRANSFER is the white pip on the balance bar: your feet have been planted long enough
+      that the next punch will carry its full weight. It is a sliding scale, not a switch:
+          feet planted  - the whole punch.
+          on the move   - about two thirds of it. You can box on the move, you just give up power.
+          side-step, pivot, mid-punch - nothing. Your weight is in the air.
+      Walking also bleeds off weight you had already set, so you cannot plant once and then circle
+      all night at full power. Chaining spends it too: the second shot of a combo is an arm punch
+      and the third is barely a punch at all. Mashing one button is the worst thing you can do -
+      give yourself a beat on your feet and the next one lands like a different punch.
+    * Your opponents know this, to different degrees. A club fighter barely sets his feet and
+      arm-punches his way through a fight; a world champion sits down on everything. Out-boxers and
+      counter-punchers are never caught punching off the back foot, while swarmers and brawlers
+      throw from wherever they happen to be standing - which is what makes them catchable coming in.
+      When a good opponent stops dead in front of you, he is loading one up. That is your moment.
+    * The same goes for him. Catch him with his hands still out - on the way back from a punch, not
+      just on the way out - and there is nothing between your glove and his chin.
 
 Feints
     * SHIFT (or G) + a punch key throws a FEINT: the first half of the punch, snapped back. It can't
@@ -196,7 +237,7 @@ CUT_OPEN_CRIT = 0.07         # ...or a critical one
 CUT_GROW = 0.3               # cut severity added per point of damage once it's open
 CUT_STOP = 100               # the ringside doctor stops it here...
 CUT_CHECK = 84               # ...or at the end of a round if the corner can't get it under this
-DMG_SCALE = 0.42             # rounds are long: punches do less, fights go the distance more often
+DMG_SCALE = 0.36             # rounds are long: punches do less, fights go the distance more often
 HURT = {"head": 12, "body": 11}   # how far in front of the hips the head / body can be hit
 TARGET_Y = {"head": 30, "body": 46}
 
@@ -253,6 +294,9 @@ STAM_HOLD = 14.0              # cost per second of sitting behind a high/low gua
 STAM_MOVE = 1.6              # cost per second of walking
 STAM_REGEN = 11.5            # recovered per second when you give yourself a breather...
 STAM_REGEN_DELAY = 0.55      # ...this long after your last punch
+STAM_REGEN_PUNCH = 0.15      # a man still reeling his hand in is not catching his breath. Without
+                             # this, stretching a punch's recovery (REC_WHIFF) would hand out wind
+                             # as a reward for throwing wildly.
 STAM_REGEN_IDLE = 1.8        # standing still (not walking, not blocking) recovers this much faster
 GAS_LINE = 30                # below this you are GASSED
 STAM_GUARD_REGEN = 1.1       # YOU get your wind back behind a high/low guard (you aren't punching)...
@@ -308,9 +352,66 @@ ACTIONS = {
                  cancel=3, lunge=[0, 0, -1, -1, 0, 0]),
 }
 PUNCHES = ("jab", "cross", "body_jab", "body_cross", "hook", "uppercut")
-BIG_SHOTS = ("hook", "uppercut")   # miss with one of these and you're off balance
-OFF_BALANCE = 0.3            # ...for this long
+BIG_SHOTS = ("hook", "uppercut")   # the two you really have to commit your weight to
+OFF_BALANCE = 0.3            # (kept for the old tests: stumbles are timed by STUMBLE_TIME now)
 WIDE_LAT = 2.3               # a hook's arc catches a man this many times further off the line
+
+# ============================================================ balance, weight transfer, exposure
+# A punch is not a move that resolves - it is a commitment. Throwing one takes your weight off your
+# feet, leaves your hand out of position, and takes a beat to come back from. How big a beat depends
+# on how far you reached, on what (if anything) stopped it, and on whether you were set when you
+# threw it. None of this is a flag: it is all a matter of degree, which is what makes overcommitting
+# feel dangerous instead of merely unlucky.
+BAL_MAX = 1.0
+BAL_COST = {"jab": 0.07, "cross": 0.19, "body_jab": 0.09, "body_cross": 0.21,
+            "hook": 0.30, "uppercut": 0.26}
+BAL_WHIFF = 1.5              # swung through thin air: nothing took your weight but the floor
+BAL_LAND = 0.55              # it landed: his head or his ribs absorbed it and you stay squarer
+BAL_BLOCK = 0.80             # he caught it on the gloves
+BAL_REACH = 0.55             # extra share of the cost for a punch thrown at full stretch
+BAL_REGEN = 0.78             # /s with your feet planted and nothing else going on
+BAL_REGEN_MOVE = 0.42        # /s on the move
+BAL_REGEN_PUNCH = 0.16       # /s while the punch is still going out
+BAL_REGEN_REC = 0.34         # /s while you are getting the hand back and the weight over your feet
+BAL_GAS = 0.55               # share of your recovery a dead tank costs you
+BAL_HIT = 0.14               # taking one clean rocks you back...
+BAL_HIT_MOVE = 0.26          # ...and more if you walked onto it
+BAL_PUSH = 0.016             # balance lost per pixel of knockback
+BAL_MOVED = 1.6              # how much easier a man off balance is to shove around
+BAL_STUMBLE = 0.10           # spend past this and your feet go
+STUMBLE_MIN, STUMBLE_MAX = 0.26, 0.52    # how long for, by how far past the line you went
+BAL_POWER = 0.42             # share of a punch's power that comes up off your legs
+BAL_SPEED = 0.20             # share of your hand speed that needs your weight under you
+BAL_ROLL = 0.30              # how much harder a punch lands on a man who cannot roll with it
+BAL_PARRY = 0.34             # getting parried takes your weight with it
+
+# Weight transfer: seconds with your feet under you, up to SET_TIME, is what you have to drive a
+# punch with. Chaining spends most of it, so the second shot of a combo is an arm punch - mix in a
+# beat on your feet and the next one carries. SET_FLOOR is a punch with nothing behind it at all.
+SET_TIME = 0.40
+SET_FLOOR = 0.55
+SET_KEEP = 0.45              # share of your set-ness still there for the next punch
+SET_REPLANT = 0.5            # how fast your feet come back under you through a punch's recovery
+SET_WALK = 0.45              # ...and how fast while you are walking, up to:
+SET_WALK_CAP = 0.25          # the most weight you can get behind a punch without planting your feet
+SET_SHED = 1.0               # ...and how fast walking bleeds off weight you had already set. Without
+                             # this you could plant once and then circle all night at full power.
+
+# Exposure: how far out of position the hand you threw is, 0..1 scaled by the size of the punch.
+EXPOSE = {"jab": 0.40, "cross": 0.75, "body_jab": 0.50, "body_cross": 0.85,
+          "hook": 1.00, "uppercut": 0.90}
+EXPOSE_RISE = 7.0            # /s as the punch goes out
+EXPOSE_FALL = 2.6            # /s as you bring it back
+EXPOSE_GUARD = 0.50          # a hand that is out is not blocking: the guard drains faster
+EXPOSE_IMPACT = 0.75         # how much harder a punch lands on a man whose hands are out
+
+# Recovery: the back half of a punch stretches with what happened to the front half.
+REC_WHIFF = 1.75             # it hit nothing...
+REC_BLOCK = 1.20             # ...or got caught on the gloves
+REC_LAND = 0.85              # landing flush gets you back on balance quickest
+REC_BAL = 1.10               # being off balance drags it out
+REC_GAS = 0.45               # so does a dead tank
+REC_MAX = 3.20
 
 # ============================================================ feints
 # A feint is the first half of a punch, snapped back before it lands. It costs almost no wind and
@@ -339,11 +440,14 @@ BUFFER_TIME = 0.8            # a key pressed up to this long before you can act 
 #   feint    : how often it throws feints of its own      pace : how well it rations its wind
 LEVELS = {
     "EASY": dict(react=0.30, delay=(0.18, 0.34), slip=0.15, wrong=0.38, parry=0.0, atk=(1.0, 2.2),
-                 combo=0.20, flurry=0.25, punish=0.20, guard_up=0.10, learn=0.3, feint=0.0, pace=0.45),
+                 combo=0.20, flurry=0.25, punish=0.20, guard_up=0.10, learn=0.3, feint=0.0, pace=0.45,
+                 plant=0.38),
     "NORMAL": dict(react=0.63, delay=(0.12, 0.22), slip=0.25, wrong=0.18, parry=0.30, atk=(0.6, 1.4),
-                   combo=0.35, flurry=0.50, punish=0.55, guard_up=0.20, learn=1.0, feint=0.18, pace=0.8),
+                   combo=0.35, flurry=0.50, punish=0.55, guard_up=0.20, learn=1.0, feint=0.18, pace=0.8,
+                   plant=0.72),
     "HARD": dict(react=0.76, delay=(0.09, 0.17), slip=0.30, wrong=0.12, parry=0.45, atk=(0.45, 1.1),
-                 combo=0.50, flurry=0.70, punish=0.70, guard_up=0.25, learn=1.5, feint=0.3, pace=1.0),
+                 combo=0.50, flurry=0.70, punish=0.70, guard_up=0.25, learn=1.5, feint=0.3, pace=1.0,
+                 plant=1.00),
 }
 LEVEL_KEYS = ["EASY", "NORMAL", "HARD"]
 # He is never certain. However good he is, there is always a way through - and sustained pressure
@@ -1053,6 +1157,18 @@ FORCE_SPAR_STYLE = None      # (tests) always spar this style
 SPAR_STYLE_STATS = True      # sparring partners get their style's build (not its health: 100 for everyone)
 STYLE_ORDER = ("outboxer", "swarmer", "slugger", "counter", "volume", "peekaboo", "spoiler", "body", "brawler",
                "boxer_puncher")
+# How much a man of each style bothers to set his feet before he lets a power shot go, on top of
+# whatever his tier gives him. Technicians sit down on their punches; come-forward fighters throw
+# from wherever they happen to be standing, which is why they are easier to catch coming in.
+# Short forms of the style names, for when the full one will not fit beside the gym sign.
+STYLE_SHORT = {"outboxer": "OUT-BOXER", "swarmer": "PRESSURE", "slugger": "SLUGGER",
+               "counter": "COUNTER", "volume": "VOLUME", "peekaboo": "PEEK-A-BOO",
+               "spoiler": "SPOILER", "body": "BODY", "brawler": "BRAWLER",
+               "boxer_puncher": "BOXER-P."}
+SPAR_LABEL_X = 214           # the opponent's label must not start left of this (the gym sign)
+PLANT_STYLE = {"outboxer": 0.22, "counter": 0.26, "boxer_puncher": 0.20, "peekaboo": 0.12,
+               "slugger": 0.10, "body": 0.06, "volume": -0.14, "spoiler": -0.10,
+               "swarmer": -0.20, "brawler": -0.24}
 TIER_NAMES = {1: "CLUB FIGHTER", 2: "REGIONAL", 3: "NATIONALLY RANKED", 4: "WORLD CONTENDER", 5: "WORLD CHAMPION"}
 TIER_SKILL = {1: 0.08, 2: 0.33, 3: 0.58, 4: 0.82, 5: 1.0}
 
@@ -1234,6 +1350,7 @@ def ai_profile(tier, style, extra=None, skill=0.0):
         else:
             p[k] = a + (b - a) * t
     st = STYLES[style]
+    p["plant"] = clamp(p["plant"] + PLANT_STYLE.get(style, 0.0), 0.04, 1.0)
     for k, v in st["ai"].items():
         if k == "atk_x":
             p["atk"] = (p["atk"][0] * v, p["atk"][1] * v)
@@ -2589,10 +2706,13 @@ INFO_PANEL = pygame.Rect(8, 2, VW - 16, 156)
 MOVE_ROWS = (("ARROWS", "MOVE / CIRCLE"), ("A / S", "JAB / CROSS"), ("D / F", "BODY SHOTS"),
              ("Z / V", "HOOK / UPPERCUT"),
              ("W (+DIR)", "SLIP / STEP"), ("E / R HOLD", "BLOCK HI / LOW"), ("SHIFT+A..F", "FEINT"),
-             ("Q", "CLINCH"), ("X", "PIVOT"))
+             ("Q", "CLINCH"), ("X", "PIVOT"), ("P", "PAUSE / MENU"))
 FIGHT_TIPS = ("Slip then punch = COUNTER", "Block late = PARRY", "Step off his line: W + ARROW",
               "Hooks catch side-steps", "Uppercut splits the guard", "Feint him, then land big",
-              "X pivots you off the ropes", "3 knockdowns = T.K.O.", "Mash A S D F to get up")
+              "X pivots you off the ropes", "3 knockdowns = T.K.O.", "Mash A S D F to get up",
+              "Power comes off the floor", "Feet set = the white pip", "Whiffing costs you balance",
+              "Catch him coming back", "Off balance? Jab and reset", "Stand still to get set",
+              "Mashing = arm punches", "Hooks cost the most balance", "A planted punch hurts more")
 
 
 def make_info_icon(d, fill, ring, glyph, ring_w=1, halo=3):
@@ -2704,6 +2824,12 @@ class Fighter:
         self.side_t, self.side_cd = 0.0, 0.0
         self.side_v = (0.0, 0.0)       # direction of the side-step
         self.action, self.idx, self.t = None, 0, 0.0
+        # --- balance / weight transfer / exposure (see the notes by BAL_COST)
+        self.bal = BAL_MAX             # 1 = weight square over your feet, 0 = falling over
+        self.set_t = SET_TIME          # seconds planted: what you have to drive a punch with
+        self.drive = 1.0               # how much weight went into the punch in flight
+        self.expose = 0.0              # how far out of position your hands are
+        self.rec_x = 1.0               # how much longer this punch's recovery is running
         self.idle_i, self.idle_t = 0, 0.0
         self.walk_i, self.walk_t = 0, 0.0
         self.moving = 0
@@ -2864,8 +2990,18 @@ class Fighter:
         return math.atan2(other.z - self.z, other.x - self.x)
 
     def spd(self):
-        """Animation speed right now: hurt and gassed fighters punch slower."""
-        return self.speed * (0.82 if self.hurt else 1.0) * (0.78 if self.gassed else 1.0)
+        """Animation speed right now: hurt, gassed and off-balance fighters punch slower."""
+        return (self.speed * (0.82 if self.hurt else 1.0) * (0.78 if self.gassed else 1.0)
+                * (1.0 - BAL_SPEED + BAL_SPEED * self.bal))
+
+    def set_x(self):
+        """How much weight transfer you have available: SET_FLOOR with your feet still moving,
+        1.0 once they have been planted for SET_TIME."""
+        return SET_FLOOR + (1.0 - SET_FLOOR) * min(1.0, self.set_t / SET_TIME)
+
+    def footing(self):
+        """What a punch thrown right now would carry: your legs (balance) times your feet (set)."""
+        return (1.0 - BAL_POWER + BAL_POWER * self.bal) * self.set_x()
 
     def on_ropes(self):
         """Backed up against the ring edge with nowhere to go: the ropes are right behind him."""
@@ -2880,8 +3016,9 @@ class Fighter:
         return (GAS_LINE - self.stam) / GAS_LINE
 
     def punch_power(self):
-        """Damage multiplier: tired arms don't carry the same snap."""
-        return self.power * (1.0 - 0.3 * self.gas())
+        """Damage multiplier for the punch in flight: tired arms don't carry the same snap, and
+        neither do arms swung with no weight behind them (self.drive, fixed when you threw it)."""
+        return self.power * (1.0 - 0.3 * self.gas()) * self.drive
 
     def spend(self, amount):
         self.stam = max(0.0, self.stam - amount / self.wind)
@@ -2922,6 +3059,11 @@ class Fighter:
         self.stam_t = 0.0
         if name in PUNCHES:
             self.thrown += 1
+            # what you are driving this one with is decided NOW, by where your weight is. Chaining
+            # straight off the last punch spends most of what you had left.
+            self.drive = self.footing()
+            self.set_t *= SET_KEEP
+            self.rec_x = 1.0
         self.track_left = TRACK_MAX if name in PUNCHES or name in FEINTS else 0.0
         if self.game.mode != "bag":
             o = self.foe()
@@ -2947,8 +3089,37 @@ class Fighter:
         self.action, self.idx, self.t = None, 0, 0.0
         self.idle_t = self.walk_t = 0.0
 
+    def commit(self, outcome, ext=1.0):
+        """The punch is spent. Pay for it: the balance it took off your feet, and how long it now
+        takes to get your hand back and your weight over them. `outcome` is what stopped it -
+        "land" (his head took the momentum), "block" (his gloves did) or "whiff" (nothing did) -
+        and `ext` is how far you had reached when that happened."""
+        name = self.action
+        if name not in PUNCHES:
+            return
+        out = {"land": BAL_LAND, "block": BAL_BLOCK, "whiff": BAL_WHIFF}[outcome]
+        cost = BAL_COST.get(name, 0.12) * (1.0 + BAL_REACH * clamp(ext, 0.0, 1.0)) * out
+        cost *= 1.0 + 0.5 * self.gas()                 # nothing to hold you up on an empty tank
+        self.bal = max(0.0, self.bal - cost)
+        rec = {"land": REC_LAND, "block": REC_BLOCK, "whiff": REC_WHIFF}[outcome]
+        rec *= 1.0 + REC_BAL * (1.0 - self.bal) + REC_GAS * self.gas()
+        self.rec_x = min(REC_MAX, rec)
+        if self.bal <= BAL_STUMBLE:
+            self.stumble()
+
+    def stumble(self):
+        """Your feet have gone. Not a flag that fires on a missed hook - what happens when you have
+        spent more balance than you had, whatever you spent it on."""
+        over = clamp((BAL_STUMBLE - self.bal) / max(1e-6, BAL_STUMBLE), 0.0, 1.0)
+        self.bal = BAL_STUMBLE + 0.08
+        self.set_t = 0.0
+        self.expose = max(self.expose, 0.8)
+        self.stagger(STUMBLE_MIN + (STUMBLE_MAX - STUMBLE_MIN) * over)
+        self.game.on_stumble(self)
+
     def get_hit(self, target, stun):
         self.finish_action()
+        self.set_t = 0.0               # rocked: your feet are not under you any more
         self.block = None
         self.buffer = None
         self.stun_t = 0.0
@@ -2959,6 +3130,7 @@ class Fighter:
 
     def stagger(self, dur):
         self.finish_action()
+        self.set_t = 0.0
         self.block = None
         self.buffer = None
         self.hitstun = 0.0
@@ -2969,6 +3141,8 @@ class Fighter:
         Pressure fighters lean into punches and give up less ground."""
         if px > 0:
             px *= 1.0 - self.sturdy
+            px *= 1.0 + (BAL_MOVED - 1.0) * (1.0 - self.bal)   # a man off balance gets moved
+            self.bal = max(0.0, self.bal - BAL_PUSH * px)
         ux, uz = self.u()
         self.x = clamp(self.x - ux * px, MIN_X, STAGE_MAX_X)
         if self.game.mode != "bag":
@@ -3073,7 +3247,9 @@ class Fighter:
         self.stam_t += dt
         if self.stam_t >= STAM_REGEN_DELAY and not (self.down or self.out_cold):
             rate = STAM_REGEN * self.wind
-            if self.block:
+            if self.action in PUNCHES:
+                rate *= STAM_REGEN_PUNCH         # still throwing, or still getting the hand back
+            elif self.block:
                 rate *= STAM_GUARD_REGEN if self.pro_regen else 0.5
             elif self.moving:
                 rate *= STAM_MOVE_REGEN if self.pro_regen else 1.0
@@ -3091,6 +3267,40 @@ class Fighter:
             if self.puff_t <= 0:
                 self.puff_t = random.uniform(0.35, 0.6)
                 self.game.puff(self)
+
+        # --- balance, weight transfer, exposure. Your feet come back under you when you give
+        # them a beat to; your hands come back down as you reset from whatever you threw.
+        if not (self.down or self.out_cold):
+            # `rate` is balance back per second; `gain` is how fast your weight gets over your
+            # feet in this state (0 = it doesn't, and whatever you had is gone), `cap` the most it
+            # can reach without planting.
+            cap = SET_TIME
+            if self.clinch:
+                rate, gain = BAL_REGEN * 1.4, 0.0            # leaning on him is a rest for the legs
+            elif self.side_t > 0 or self.pivot_t > 0:
+                rate, gain = BAL_REGEN_MOVE * 0.6, 0.0       # explosive: your weight is in the air
+            elif self.action in PUNCHES:
+                # going out, or coming back: either way your weight is not settled, though you do
+                # start re-planting as you bring the hand back in.
+                rate, gain = ((BAL_REGEN_REC, SET_REPLANT) if self.hit_done
+                              else (BAL_REGEN_PUNCH, 0.0))
+            elif self.moving:
+                rate, gain = BAL_REGEN_MOVE, SET_WALK        # footwork builds some of it, to a point
+                cap = SET_TIME * SET_WALK_CAP
+            else:
+                rate, gain = BAL_REGEN, 1.0
+            self.bal = min(BAL_MAX, self.bal + rate * dt * (1.0 - BAL_GAS * self.gas()))
+            if gain <= 0.0:
+                self.set_t = 0.0
+            elif self.set_t > cap:
+                self.set_t = max(cap, self.set_t - dt * SET_SHED)  # walking the weight back off
+            else:
+                self.set_t = min(cap, self.set_t + dt * gain)
+            if self.action in PUNCHES and not self.hit_done:
+                self.expose = min(EXPOSE.get(self.action, 0.5),
+                                  self.expose + EXPOSE_RISE * dt)
+            else:
+                self.expose = max(0.0, self.expose - EXPOSE_FALL * dt)
 
         # concussion / body damage wear off slowly
         self.daze_t += dt
@@ -3204,8 +3414,9 @@ class Fighter:
             turned = self.turn_to(self.angle_to(o), TRACK_RATE * (0.25 if o.side_t > 0 else 1.0), dt)
             self.track_left = max(0.0, self.track_left - turned)
         self.t += dt * 1000.0 * self.spd()
-        while self.action and self.t >= spec["ms"][self.idx]:
-            self.t -= spec["ms"][self.idx]
+        # the back half of a punch runs long or short depending on what the front half ran into
+        while self.action and self.t >= spec["ms"][self.idx] * (self.rec_x if self.hit_done else 1.0):
+            self.t -= spec["ms"][self.idx] * (self.rec_x if self.hit_done else 1.0)
             self.idx += 1
             if self.idx >= len(spec["frames"]):
                 self.check_miss(len(spec["frames"]))
@@ -3366,6 +3577,7 @@ class AI:
         L = self.params
         self.atk_t = random.uniform(*L["atk"]) + 0.4
         self.plan = []
+        self.plant_t = 0.0
         self.def_plan = None
         self.seen = -1
         self.move = 0
@@ -3425,6 +3637,8 @@ class AI:
         pace = L.get("pace", 1.0)
         R = self.game.ranges
         dist = self.game.dist()
+        if self.me.bal < 0.45:                    # no legs under him: nothing he can lean on
+            return random.choice([["jab"], ["jab"], ["body_jab"], ["jab", "jab"]])
         if self.me.stam < 45 * pace:              # low on wind: pick your shots, mostly jabs
             if self.me.stam < 26 * pace:
                 return ["jab"]
@@ -3627,6 +3841,10 @@ class AI:
         # --- offence
         if me.counter_t > 0 and not self.plan and dist <= R["cross"]:
             self.plan = [random.choice(["cross", "body_cross", "cross"])]
+        if (foe.expose > 0.5 and not self.plan and not me.action and me.bal > 0.5
+                and dist <= R["cross"] and random.random() < L.get("punish", 0.4) * dt * 7.0):
+            short = dist < R["hook"]             # his hand is still out there: go through the gap
+            self.plan = [random.choice(["hook", "uppercut", "cross"] if short else ["cross", "jab"])]
         if self.punish:
             self.punish = False
             if random.random() < L["punish"] and dist <= R["cross"] + 4:
@@ -3657,6 +3875,15 @@ class AI:
                 return
             self.plan.clear()                     # (he kept away - start again)
         self.wait_t = 0.0
+        if (self.plan and me.can_start(self.plan[0]) and POWER.get(self.plan[0], 0.0) >= 2.0
+                and me.set_t < SET_TIME * 0.95 and me.bal > 0.45
+                and self.plant_t < (SET_TIME + 0.12) * L.get("plant", 0.6)):
+            self.plant_t += dt                   # set his feet first: a power shot off the back foot
+            self.move = self.zmove = 0           # is an arm punch, and he knows it. Stand still -
+            return                               # set_t only grows while the feet are planted. How
+                                                 # long he is prepared to wait is his skill: a club
+                                                 # fighter hardly bothers, a champion always does.
+        self.plant_t = 0.0
         if self.plan and me.can_start(self.plan[0]):
             nxt = self.plan[0]
             if (nxt in PUNCHES and me.stam > 35 and foe.block is None and not foe.busy()
@@ -3838,6 +4065,9 @@ class Game:
         self.info_rect = pygame.Rect(0, 0, INFO_D_HOVER + 4, INFO_D_HOVER + 4)
         self.info_rect.center = INFO_CENTER
         self.info_open = False
+        self.pause_open = False    # the P menu: where to next / leave this fight
+        self.pause_i = 0
+        self.pause_t = 0.0
         self.info_t = 0.0          # 0 shut, 1 fully open
         self.info_seen = False     # has the player opened it yet?
         self._panel = {}
@@ -4663,6 +4893,8 @@ class Game:
                     self.reset_bag()
 
     def mouse(self, x, y, click):
+        if self.pause_open:                       # the menu is modal: use the keyboard
+            return
         self.hover = None
         if self.info_rect.collidepoint(x, y):
             self.hover = "info"
@@ -4682,6 +4914,43 @@ class Game:
             self.toggle_mode()
         elif self.hover == "campaign":
             self.start_campaign()
+
+    def pause_rows(self):
+        """(label, what it does, action). What leaving means depends on where you are."""
+        if self.mode == "bag":
+            return [("SPARRING", "three rounds, a new style every time", "spar"),
+                    ("CAMPAIGN", "your career: pick your fights, climb to the title", "campaign"),
+                    ("BACK TO THE BAG", "carry on working the heavy bag", "close")]
+        if self.mode == "campaign":
+            return [("RESUME", "back to it", "close"),
+                    ("SAVE AND QUIT TO THE GYM", "your career is kept where it stands", "savequit")]
+        return [("RESUME", "back to it", "close"),
+                ("QUIT TO THE GYM", "end this sparring session", "quit")]
+
+    def toggle_pause(self):
+        self.pause_open = not self.pause_open
+        self.pause_i = 0
+        if self.pause_open:                       # drop your hands, nothing is buffered through it
+            self.player.want_block = self.cpu.want_block = None
+            self.player.buffer = self.cpu.buffer = None
+        self.snd("blip")
+
+    def pause_move(self, d):
+        self.pause_i = (self.pause_i + d) % len(self.pause_rows())
+        self.snd("blip")
+
+    def pause_pick(self):
+        act = self.pause_rows()[self.pause_i][2]
+        self.pause_open = False
+        self.snd("blip")
+        if act == "spar":
+            self.start_spar()
+        elif act == "campaign":
+            self.start_campaign()
+        elif act == "savequit":
+            self.save_and_quit()
+        elif act == "quit":
+            self.reset_bag()
 
     def toggle_info(self):
         self.info_open = not self.info_open
@@ -4819,22 +5088,30 @@ class Game:
         self.texts.append(dict(s=s, x=x, y=y, vy=vy, t=0.0, life=life, color=color, font=font or self.font_m))
 
     def on_miss(self, f, frame):
-        f.spend(STAM_MISS)
-        if f.action in BIG_SHOTS and self.mode != "bag":
-            f.spend(STAM_MISS * 2)
-            name = f.action
-            f.stagger(OFF_BALANCE)                   # swung through nothing: wide open for a moment
-            wx, wy = f.tip(frame)
-            self.say("OFF BALANCE", wx - 26, wy - 18, (255, 170, 120), self.font_s, vy=-14, life=0.6)
-            if f is self.player:
-                self.ai.punish = True
-            f.action = None
-            return
+        """Swung through thin air. Nothing took your weight, so you pay the full balance cost of
+        however far you reached - which is why a missed hook will put you on your heels and a
+        missed jab will not, without either being a special case."""
+        f.spend(STAM_MISS * (3.0 if f.action in BIG_SHOTS else 1.0))
         wx, wy = f.tip(frame)
+        if self.mode != "bag":
+            f.commit("whiff", 1.0)
         o = f.foe() if self.mode != "bag" else None
-        off = o is not None and self.off_line(f, o) > LAT_HIT
-        self.say("off line" if off else "miss", wx - 12, wy - 8, (150, 156, 182), self.font_s, vy=-14, life=0.6)
+        if f.stun_t > 0:                             # the cost was more than he had: his feet went
+            self.say("OFF BALANCE", wx - 26, wy - 18, (255, 170, 120), self.font_s, vy=-14, life=0.6)
+        else:
+            off = o is not None and self.off_line(f, o) > LAT_HIT
+            lab = "off line" if off else ("miss" if f.bal > 0.45 else "no legs in it")
+            self.say(lab, wx - 12, wy - 8, (150, 156, 182), self.font_s, vy=-14, life=0.6)
         if f is self.player and self.mode != "bag":
+            self.ai.punish = True
+
+    def on_stumble(self, f):
+        """His feet have gone from under him. Worth seeing and worth hearing."""
+        if self.mode == "bag":
+            return
+        self.snd("swish")
+        self.shake, self.shake_t = 2, 0.12
+        if f is self.player:
             self.ai.punish = True
 
     # ------------------------------------------------------------ update
@@ -4843,6 +5120,10 @@ class Game:
             self.saved_t = max(0.0, self.saved_t - dt) if self.saved_t > 0 else min(0.0, self.saved_t + dt)
         self.info_t = clamp(self.info_t + (dt * 6.5 if self.info_open else -dt * 7.5), 0.0, 1.0)
         if self.info_open:                        # reading the controls pauses the fight
+            self.clock += dt
+            return
+        self.pause_t = clamp(self.pause_t + (dt * 7.0 if self.pause_open else -dt * 8.0), 0.0, 1.0)
+        if self.pause_open:                       # ...and so does the menu
             self.clock += dt
             return
         if self.slowmo > 0:                       # slow motion on the big moments
@@ -5311,12 +5592,12 @@ class Game:
                 self.say("SLIP!", hx - 12, hy - 18, (120, 220, 255), self.font_m, vy=-18, life=0.7)
                 return
         att.hit_done = True
+        # how far into the punch it landed: 1 = at the end of his reach (flush), 0 = smothered
+        ext = clamp((dist - MIN_SEP) / max(1.0, self.ranges[att.action] - MIN_SEP), 0.0, 1.0)
         blocked = d.block is not None and ((d.block == "high") == (target == "head")) and not caught
         if blocked:
-            self.blocked(att, d, spec, hx, hy)
+            self.blocked(att, d, spec, hx, hy, ext)
         else:
-            # how far into the punch it landed: 1 = at the end of his reach (flush), 0 = smothered
-            ext = clamp((dist - MIN_SEP) / max(1.0, self.ranges[att.action] - MIN_SEP), 0.0, 1.0)
             if spec.get("splits") or spec.get("wide"):
                 ext = max(ext, 0.75)                  # short punches are meant to land short
             if caught:
@@ -5330,10 +5611,14 @@ class Game:
         return (d.x + ux * HURT[target],
                 GROUND + (d.z + uz * HURT[target]) * ZK - SPRITE_FEET + TARGET_Y[target])
 
-    def blocked(self, att, d, spec, hx, hy):
+    def blocked(self, att, d, spec, hx, hy, ext=0.8):
         if d.parry_ready and d.block_t <= PARRY_WINDOW:
             d.parry_ready = False
+            att.bal = max(0.0, att.bal - BAL_PARRY)   # turned aside: your weight goes with it
             att.stagger(PARRY_STUN)
+            if att.bal <= BAL_STUMBLE:                # turned aside hard enough to take his feet
+                att.stumble()                         # (never shorter than the parry stun itself)
+                att.stun_t = max(att.stun_t, PARRY_STUN)
             d.counter_t = COUNTER_WINDOW
             self.stars.append(dict(x=hx, y=hy, t=0.0, life=0.28, big=True, kind="parry"))
             self.say("PARRY!", hx - 20, hy - 26, (130, 240, 255), self.font_l, vy=-20, life=0.9)
@@ -5341,10 +5626,12 @@ class Game:
             self.snd("parry")
             self.excite(0.12)
             return
+        att.commit("block", ext)                   # his gloves took it: you are half-way set again
         d.unanswered = max(0, d.unanswered - 1)    # covering up shows the referee he's still in it
         d.spend(STAM_BLOCK)
         split = spec.get("splits") and d.block == "high"
-        d.guard -= spec["guard"] * (1 + FLURRY_RAMP * d.block_chain) * (1 + 0.6 * d.gas()) * (1.8 if split else 1.0)
+        d.guard -= (spec["guard"] * (1 + FLURRY_RAMP * d.block_chain) * (1 + 0.6 * d.gas())
+                    * (1.8 if split else 1.0) * (1 + EXPOSE_GUARD * d.expose))
         if split:                                  # straight up the middle of the gloves
             chip = max(1, int(round(spec["spar_dmg"] * 0.3 * DMG_SCALE * att.punch_power())))
             d.hp = max(1.0, d.hp - chip)
@@ -5375,8 +5662,10 @@ class Game:
         KO_IMPACT to decide flash knockdowns and one-punch knockouts. Returns (impact, notes)."""
         k = POWER[name] * att.punch_power() ** 0.7
         k *= 0.78 + 0.37 * ext                    # flush at the end of the punch vs smothered
+        k *= 1.0 + EXPOSE_IMPACT * d.expose       # his hands were out: nothing in the way of it
+        k *= 1.0 + BAL_ROLL * (1.0 - d.bal)       # and his feet were gone: he cannot roll with it
         if counter_hit:
-            k *= 1.45                             # caught him mid-punch: he never saw it
+            k *= 1.18                             # caught him mid-punch: he never saw it coming
         if walking_in:
             k *= 1.15                             # stepped forward into it
         if stunned:
@@ -5398,6 +5687,7 @@ class Game:
 
     def clean_hit(self, att, d, spec, target, hx, hy, ext=0.6):
         name = att.action
+        att.commit("land", ext)                   # his head took your weight: you stay squarer
         mult, chance, tags = 1.0, CRIT_CHANCE, []
         stunned = d.stun_t > 0
         crit = stunned                            # hitting a stunned boxer is always critical
@@ -5437,6 +5727,10 @@ class Game:
         att.landed += 1
         if POWER[name] >= 2:
             att.power_landed += 1
+        if not glancing:                          # rocked back on his heels: whatever he throws
+            cost = (BAL_HIT_MOVE if walking_in else BAL_HIT) * POWER[name] / 2.0    # next has no
+            d.bal = max(0.0, d.bal - cost)                                          # weight in it
+            d.set_t = 0.0
         d.hp = max(0.0, d.hp - dmg)
         d.spend(STAM_HIT)
         if d.pro_regen:
@@ -5859,6 +6153,7 @@ class Game:
         if self.mode == "campaign" and self.phase in self.STORY_PHASES:
             self.draw_story(c)
             self.draw_info(c)
+            self.draw_pause(c)
             out.fill((20, 16, 28))
             out.blit(c, (0, 0))
             return
@@ -5937,6 +6232,7 @@ class Game:
         elif self.saved_t < 0:
             self.chip(c, "COULD NOT SAVE", VW // 2, 44, (255, 130, 120), center=True)
         self.draw_info(c)
+        self.draw_pause(c)
 
         if self.flash_t > 0:
             fl = pygame.Surface((VW, VH), pygame.SRCALPHA)
@@ -6358,6 +6654,37 @@ class Game:
         self._panel[mode] = s
         return s
 
+    def draw_pause(self, c):
+        t = self.pause_t
+        if t <= 0.01:
+            return
+        dim = pygame.Surface((VW, VH), pygame.SRCALPHA)
+        dim.fill((8, 6, 20, int(175 * t)))
+        c.blit(dim, (0, 0))
+        rows = self.pause_rows()
+        h = 24 + len(rows) * 30
+        top = int((VH - h) // 2 + (1.0 - t) * 10)
+        x, w = 30, VW - 60
+        panel = pygame.Rect(x, top, w, h)
+        pygame.draw.rect(c, (16, 11, 26), panel.inflate(4, 4))
+        pygame.draw.rect(c, (36, 30, 52), panel)
+        pygame.draw.rect(c, (96, 84, 128), panel, 1)
+        draw_text(c, self.font_m, "THE GYM" if self.mode == "bag" else "PAUSED",
+                  VW // 2, top + 5, (255, 214, 90), center=True)
+        for i, (name, sub, _) in enumerate(rows):
+            r = pygame.Rect(x + 5, top + 20 + i * 30, w - 10, 27)
+            on = i == self.pause_i
+            c.fill((74, 58, 116) if on else (46, 40, 64), r)
+            c.fill((132, 110, 196) if on else (60, 52, 82), (r.x, r.y, r.w, 1))
+            draw_text(c, self.font_s, name, r.x + 14, r.y + 4,
+                      (255, 255, 255) if on else (206, 202, 230))
+            draw_text(c, self.font_s, sub, r.x + 14, r.y + 15,
+                      (196, 204, 240) if on else (138, 144, 178))
+            if on:
+                draw_text(c, self.font_s, ">", r.x + 5, r.y + 9, (255, 214, 90))
+        draw_text(c, self.font_s, "UP / DOWN    ENTER    P CLOSES", VW // 2, top + h + 4,
+                  (150, 156, 182), center=True)
+
     def draw_info(self, c):
         t = self.info_t
         if t > 0:
@@ -6438,19 +6765,44 @@ class Game:
         seg(0, f.stam / STAM_MAX, scol, sy, 3)
         gx = x + (w - int(round(w * GAS_LINE / STAM_MAX)) if mirror else int(round(w * GAS_LINE / STAM_MAX)))
         c.fill((120, 100, 70), (gx, sy, 1, 3))
+        by = sy + 4                                      # balance: how far your weight is off centre
+        pygame.draw.rect(c, (20, 14, 30), (x - 1, by - 1, w + 2, 4))
+        c.fill((38, 34, 52), (x, by, w, 2))
+        if f.bal <= BAL_STUMBLE * 2.2:                   # violet, so it is never mistaken for the
+            bcol = (255, 120, 200) if int(self.clock * 7) % 2 else (160, 60, 130)   # blue guard bar
+        elif f.bal < 0.45:
+            bcol = (234, 150, 232)
+        else:
+            bcol = (176, 150, 255)
+        seg(0, f.bal, bcol, by, 2)
+        seg(0, f.bal, tuple(min(255, v + 46) for v in bcol), by, 1)
+        if f.set_t >= SET_TIME and not f.action:         # feet planted: a punch now carries. In the
+            px = x + (w - 5 if mirror else 0)            # clear gap below the bar, not on the wind
+            c.fill((255, 255, 255), (px, by + 3, 5, 2))
+
+    def spar_label(self):
+        """Who you are sparring, in the longest form that still clears the gym sign."""
+        st = STYLES[self.spar_style]
+        short = STYLE_SHORT.get(self.spar_style, st["name"])
+        budget = VW - 8 - SPAR_LABEL_X
+        for cand in ("%s  %s" % (st["name"], self.ai.level), st["name"],
+                     "%s  %s" % (short, self.ai.level), short):
+            if self.font_s.size(cand)[0] <= budget:
+                return cand
+        return short
 
     def draw_spar_hud(self, c):
         label = (170, 180, 215)
         camp = self.mode == "campaign"
         draw_text(c, self.font_s, "YOU", 8, 13, label)
-        name = self.opp["short"] if camp else "%s  %s" % (STYLES[self.spar_style]["name"], self.ai.level)
+        name = self.opp["short"] if camp else self.spar_label()
         draw_text(c, self.font_s, name, VW - 8, 13, self.opp["color"] if camp else label, right=True)
         if camp and self.opp.get("champ"):
             c.blit(self.belt_small, (VW - 8 - self.font_s.size(name)[0] - 21, 13))
         self.draw_bar(c, 8, 24, 76, self.player, False)
         self.draw_bar(c, VW - 8 - 76, 24, 76, self.cpu, True)
-        self.draw_kd_pips(c, self.player, 8, 44, False)
-        self.draw_kd_pips(c, self.cpu, VW - 8, 44, True)
+        self.draw_kd_pips(c, self.player, 8, 47, False)
+        self.draw_kd_pips(c, self.cpu, VW - 8, 47, True)
         secs = int(math.ceil(self.round_time))
         tcol = (255, 232, 130) if secs > 10 or int(self.clock * 4) % 2 else (255, 90, 80)
         draw_text(c, self.font_l, "%02d" % secs, VW // 2, 32, tcol, center=True)
@@ -6467,12 +6819,16 @@ class Game:
         if self.phase == "fight":
             for f, fx, rt in ((self.player, 8, False), (self.cpu, VW - 8, True)):
                 warn = None
-                if f.gassed:
+                if f.stun_t > 0 and f.bal <= BAL_STUMBLE + 0.1:
+                    warn, wcol = "OFF BALANCE", (255, 140, 220)
+                elif f.bal < 0.42:
+                    warn, wcol = "NO LEGS UNDER HIM" if f is self.cpu else "GET YOUR FEET SET", (235, 150, 235)
+                elif f.gassed:
                     warn, wcol = "GASSED", (255, 190, 70)
                 elif f.on_ropes() and not f.clinch:
                     warn, wcol = "ON THE ROPES", (255, 130, 120)
                 if warn and int(self.clock * 3) % 2:
-                    self.chip(c, warn, fx, 50, wcol, right=rt)
+                    self.chip(c, warn, fx, 54, wcol, right=rt)
             if self.ai.read_t > 0 and int(self.clock * 4) % 2:
                 self.chip(c, "HE'S READING YOU - MIX IT UP", VW // 2, 88, (255, 160, 100), center=True)
         if self.combo >= 2 and self.phase == "fight":
@@ -6626,10 +6982,26 @@ def handle_key(game, key):
         if game.info_open:
             game.toggle_info()                    # shut the panel first, quit on the next press
             return True
+        if game.pause_open:
+            game.toggle_pause()                   # ...same for the menu
+            return True
         return False
     if game.info_open:
         if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
             game.toggle_info()
+        elif key == pygame.K_m:
+            game.toggle_mute()
+        elif key == pygame.K_F11:
+            pygame.display.toggle_fullscreen()
+        return True
+    if key == pygame.K_p:                     # P is the menu, wherever you are
+        game.toggle_pause()
+        return True
+    if game.pause_open:
+        if key in (pygame.K_UP, pygame.K_DOWN):
+            game.pause_move(1 if key == pygame.K_DOWN else -1)
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            game.pause_pick()
         elif key == pygame.K_m:
             game.toggle_mute()
         elif key == pygame.K_F11:
@@ -6666,10 +7038,6 @@ def handle_key(game, key):
         game.menu_move(1 if key == pygame.K_DOWN else -1)
     elif key in (pygame.K_UP, pygame.K_DOWN):
         game.tap_depth(1 if key == pygame.K_DOWN else -1)
-    elif key == pygame.K_TAB:
-        game.toggle_mode()
-    elif key == pygame.K_c:
-        game.start_campaign()
     elif key == pygame.K_BACKSPACE:
         game.reset()
     elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
